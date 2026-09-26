@@ -32,6 +32,9 @@ class Database {
     this.mongo = null;
     this.isLoaded = false;
     this.writeQueue = Promise.resolve();
+    this.changeStream = null;
+    // Mongo _id -> app id, needed because change stream delete events only carry _id
+    this.mongoIds = new Map();
   }
 
   async connect() {
@@ -39,7 +42,11 @@ class Database {
     this.mongo = await connectMongo();
 
     for (const name of COLLECTIONS) {
-      this.data[name] = await this.mongo.collection(name).find({}, { projection: { _id: 0 } }).toArray();
+      const docs = await this.mongo.collection(name).find({}).toArray();
+      this.data[name] = docs.map(({ _id, ...item }) => {
+        this.mongoIds.set(String(_id), item.id);
+        return item;
+      });
     }
 
     const isEmpty = COLLECTIONS.every(name => this.data[name].length === 0);
@@ -74,6 +81,49 @@ class Database {
   // Resolves once every queued write has reached MongoDB
   flush() {
     return this.writeQueue;
+  }
+
+  // Keeps the cache in sync with writes made outside this process (scripts,
+  // a local dev server on the same database, the Atlas UI). Without this the
+  // cache goes stale and generateId() can hand out ids that already exist.
+  watchChanges() {
+    if (this.changeStream) return;
+    this.changeStream = this.mongo.watch(
+      [{ $match: { 'ns.coll': { $in: COLLECTIONS } } }],
+      { fullDocument: 'updateLookup' }
+    );
+    this.changeStream.on('change', change => this.applyChange(change));
+    this.changeStream.on('error', err => {
+      console.error('[MongoDB] Change stream error, reconnecting in 5s:', err.message);
+      this.changeStream = null;
+      setTimeout(() => this.watchChanges(), 5000).unref();
+    });
+  }
+
+  applyChange(change) {
+    const collection = change.ns.coll;
+    const key = String(change.documentKey._id);
+
+    if (change.operationType === 'delete') {
+      const id = this.mongoIds.get(key);
+      this.mongoIds.delete(key);
+      if (id === undefined) return;
+      this.data[collection] = this.data[collection].filter(item => String(item.id) !== String(id));
+      return;
+    }
+
+    if (!change.fullDocument) return;
+    const { _id, ...item } = change.fullDocument;
+    this.mongoIds.set(key, item.id);
+
+    const list = this.data[collection];
+    const index = list.findIndex(existing => String(existing.id) === String(item.id));
+    if (index === -1) {
+      list.push(item);
+    } else if (!(list[index].updated_at > item.updated_at)) {
+      // Skip echoes of this process's own older writes that arrive after a newer in-memory change
+      list[index] = item;
+    }
   }
 
   // Generic CRUD helpers

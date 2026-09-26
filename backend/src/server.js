@@ -5,6 +5,7 @@ import path from 'path';
 
 import config from './config/index.js';
 import { seedDatabase } from './db/seed.js';
+import { db } from './db/database.js';
 import { securityHeaders, sanitizeInput, createRateLimiter } from './middleware/security.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import apiRoutes from './routes/index.js';
@@ -61,6 +62,7 @@ app.use(errorHandler);
 // Auto seed and launch with resilient port conflict handling
 async function startServer(port = config.port) {
   await seedDatabase();
+  db.watchChanges();
   const server = app.listen(port, '0.0.0.0', () => {
     console.log(`=======================================================`);
     console.log(` Educational Portal Backend is LIVE!`);
