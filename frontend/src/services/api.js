@@ -1,4 +1,6 @@
-const API_BASE = '/api';
+// Dev uses the Vite proxy (/api -> localhost backend); production builds call the Render backend
+export const API_BASE = import.meta.env.VITE_API_BASE_URL
+  || (import.meta.env.PROD ? 'https://techcaddstudent.onrender.com/api' : '/api');
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('auth_token');

@@ -16,7 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { api } from '../../services/api';
+import { api, API_BASE } from '../../services/api';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
@@ -135,7 +135,7 @@ export function AdminTrainers() {
     setProcessingAction(true);
     try {
       if (actionType === 'delete') {
-        const res = await fetch(`/api/trainers/${actionTrainer.id}?permanent=true`, {
+        const res = await fetch(`${API_BASE}/trainers/${actionTrainer.id}?permanent=true`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
