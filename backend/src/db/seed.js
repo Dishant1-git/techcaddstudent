@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import { db } from './database.js';
+import { closeMongo } from './mongo.js';
 
 export async function seedDatabase() {
   console.log('--- Initializing / Seeding Database ---');
+  await db.connect();
 
   // Check if users already exist
   const existingUsers = db.find('users');
@@ -21,6 +23,7 @@ export async function seedDatabase() {
   db.data.complaints = [];
   db.data.notifications = [];
   db.data.audit_logs = [];
+  await Promise.all(Object.keys(db.data).map(name => db.mongo.collection(name).deleteMany({})));
 
   const passwordHash = await bcrypt.hash('password123', 10);
   const adminPassword = await bcrypt.hash('Harinder@9203', 10);
@@ -530,11 +533,11 @@ export async function seedDatabase() {
     ip_address: '192.168.1.48'
   });
 
-  db.saveSync();
+  await db.flush();
   console.log('--- Database Seed Completed Successfully ---');
 }
 
 // Auto-run if executed directly
 if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
-  seedDatabase();
+  seedDatabase().finally(closeMongo);
 }

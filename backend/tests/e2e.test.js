@@ -4,6 +4,7 @@ import http from 'http';
 import { fileURLToPath } from 'url';
 import app from '../src/server.js';
 import { seedDatabase } from '../src/db/seed.js';
+import { connectMongo, closeMongo } from '../src/db/mongo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,10 +150,9 @@ async function runE2ETests() {
 
     // 4. Password Cryptography Verification in Database
     console.log('\n--- Testing Database Password Storage Cryptography ---');
-    const dbFilePath = path.join(__dirname, '../src/db/data.json');
-    if (fs.existsSync(dbFilePath)) {
-      const dbContent = JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
-      const allUsers = dbContent.users || [];
+    {
+      const mongo = await connectMongo();
+      const allUsers = await mongo.collection('users').find({}).toArray();
       const hasPlainText = allUsers.some(u => !u.password_hash || !u.password_hash.startsWith('$2b$10$'));
       assert(!hasPlainText && allUsers.length > 0, 'ALL passwords stored exclusively as salted Bcrypt hashes ($2b$10$...)');
     }
@@ -254,6 +254,7 @@ async function runE2ETests() {
     if (localServerInstance) {
       localServerInstance.close();
     }
+    await closeMongo();
 
     if (failed > 0) {
       process.exit(1);

@@ -86,7 +86,10 @@ async function startServer(port = config.port) {
 import { pathToFileURL } from 'url';
 const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun && process.env.NODE_ENV !== 'test') {
-  startServer();
+  startServer().catch((err) => {
+    console.error('[Startup] Failed to connect to MongoDB:', err.message);
+    process.exit(1);
+  });
 }
 
 export default app;

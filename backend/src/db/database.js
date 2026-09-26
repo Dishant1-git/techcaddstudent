@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { connectMongo } from './mongo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DB_FILE = path.join(__dirname, 'data.json');
+// Legacy JSON store, only read once to migrate existing data into an empty MongoDB
+const LEGACY_DB_FILE = path.join(__dirname, 'data.json');
 
 // Initial Schema
 const defaultSchema = {
@@ -17,50 +19,61 @@ const defaultSchema = {
   complaints: [],
   notifications: [],
   audit_logs: [],
-  settings: {}
 };
 
+const COLLECTIONS = Object.keys(defaultSchema);
+
+// In-memory cache backed by MongoDB. Reads are served from memory so the
+// synchronous API used by the routes stays the same; every write is persisted
+// to MongoDB in order through a promise queue.
 class Database {
   constructor() {
-    this.data = { ...defaultSchema };
+    this.data = structuredClone(defaultSchema);
+    this.mongo = null;
     this.isLoaded = false;
-    this.savePromise = null;
-    this.init();
+    this.writeQueue = Promise.resolve();
   }
 
-  init() {
-    try {
-      if (!fs.existsSync(__dirname)) {
-        fs.mkdirSync(__dirname, { recursive: true });
-      }
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        this.data = { ...defaultSchema, ...JSON.parse(raw) };
-      } else {
-        this.saveSync();
-      }
-      this.isLoaded = true;
-    } catch (err) {
-      console.error('Error initializing database:', err);
-      this.data = { ...defaultSchema };
-      this.isLoaded = true;
+  async connect() {
+    if (this.isLoaded) return;
+    this.mongo = await connectMongo();
+
+    for (const name of COLLECTIONS) {
+      this.data[name] = await this.mongo.collection(name).find({}, { projection: { _id: 0 } }).toArray();
     }
+
+    const isEmpty = COLLECTIONS.every(name => this.data[name].length === 0);
+    if (isEmpty && fs.existsSync(LEGACY_DB_FILE)) {
+      await this.importLegacyData();
+    }
+
+    for (const name of COLLECTIONS) {
+      await this.mongo.collection(name).createIndex({ id: 1 }, { unique: true });
+    }
+    this.isLoaded = true;
   }
 
-  saveSync() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Error saving database synchronously:', err);
+  async importLegacyData() {
+    const legacy = JSON.parse(fs.readFileSync(LEGACY_DB_FILE, 'utf-8'));
+    for (const name of COLLECTIONS) {
+      const docs = Array.isArray(legacy[name]) ? legacy[name] : [];
+      if (docs.length === 0) continue;
+      await this.mongo.collection(name).insertMany(docs.map(doc => ({ ...doc })));
+      this.data[name] = docs;
     }
+    console.log('[MongoDB] Imported existing data from data.json');
   }
 
-  save() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Error saving database:', err);
-    }
+  persist(operation) {
+    this.writeQueue = this.writeQueue
+      .then(() => operation(this.mongo))
+      .catch(err => console.error('[MongoDB] Write failed:', err));
+    return this.writeQueue;
+  }
+
+  // Resolves once every queued write has reached MongoDB
+  flush() {
+    return this.writeQueue;
   }
 
   // Generic CRUD helpers
@@ -118,7 +131,7 @@ class Database {
       updated_at: normalizedItem.updated_at || now,
     };
     this.data[collection].push(newItem);
-    this.save();
+    this.persist(mongo => mongo.collection(collection).insertOne({ ...newItem }));
     return newItem;
   }
 
@@ -140,16 +153,18 @@ class Database {
       updated_at: new Date().toISOString()
     };
     this.data[collection][index] = updated;
-    this.save();
+    this.persist(mongo => mongo.collection(collection).replaceOne({ id: existing.id }, { ...updated }));
     return updated;
   }
 
   delete(collection, id) {
     if (!this.data[collection]) return false;
-    const initialLen = this.data[collection].length;
-    this.data[collection] = this.data[collection].filter(item => String(item.id) !== String(id));
-    if (this.data[collection].length !== initialLen) {
-      this.save();
+    const removedIds = this.data[collection]
+      .filter(item => String(item.id) === String(id))
+      .map(item => item.id);
+    if (removedIds.length > 0) {
+      this.data[collection] = this.data[collection].filter(item => String(item.id) !== String(id));
+      this.persist(mongo => mongo.collection(collection).deleteMany({ id: { $in: removedIds } }));
       return true;
     }
     return false;
