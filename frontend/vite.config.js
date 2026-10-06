@@ -19,6 +19,7 @@ export default defineConfig({
       '/api': {
         target: BACKEND_URL,
         changeOrigin: true,
+        ws: true, // chat WebSocket lives at /api/ws
       },
       '/uploads': {
         target: BACKEND_URL,

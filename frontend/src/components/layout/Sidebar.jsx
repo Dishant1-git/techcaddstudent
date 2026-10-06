@@ -13,6 +13,7 @@ import {
   FileBarChart2,
   FileCheck2,
   Bell,
+  MessageSquare,
   History,
   Settings,
   ShieldCheck,
@@ -25,12 +26,13 @@ import { useNotifications } from '../../context/NotificationContext';
 
 export function Sidebar({ isOpen, onClose }) {
   const { role, user } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, unreadMessages } = useNotifications();
 
   const studentLinks = [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { to: '/student/attendance', label: 'My Attendance', icon: CalendarCheck },
     { to: '/student/complaints', label: 'Report Complaint', icon: AlertOctagon },
+    { to: '/student/messages', label: 'Message Admin', icon: MessageSquare, badge: unreadMessages },
     { to: '/student/profile', label: 'My Profile', icon: User },
     { to: '/student/notifications', label: 'Notifications', icon: Bell, badge: unreadCount }
   ];
@@ -40,6 +42,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/trainer/verifications', label: 'Attendance Verification', icon: FileCheck2 },
     { to: '/trainer/students', label: 'My Students', icon: Users },
     { to: '/trainer/reports', label: 'Attendance Reports', icon: FileBarChart2 },
+    { to: '/trainer/messages', label: 'Message Admin', icon: MessageSquare, badge: unreadMessages },
     { to: '/trainer/profile', label: 'Trainer Profile', icon: User },
     { to: '/trainer/notifications', label: 'Notifications', icon: Bell, badge: unreadCount }
   ];
@@ -53,6 +56,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/admin/attendance', label: 'Attendance Oversight', icon: CalendarCheck },
     { to: '/admin/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/admin/complaints', label: 'Complaints Hub', icon: AlertOctagon },
+    { to: '/admin/messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages },
     { to: '/admin/audit-logs', label: 'Audit Trail', icon: History },
     { to: '/admin/notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
     { to: '/admin/settings', label: 'Portal Settings', icon: Settings }

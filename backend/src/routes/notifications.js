@@ -16,6 +16,8 @@ router.get('/', requireAuth, (req, res) => {
     return res.json({
       success: true,
       unreadCount,
+      // Piggybacks on this poll so the chat badge needs no extra request
+      unreadMessages: db.countUnreadMessages(req.user),
       count: list.length,
       data: list
     });

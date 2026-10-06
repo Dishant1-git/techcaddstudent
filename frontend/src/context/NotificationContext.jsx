@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { socket } from '../services/socket';
 import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
@@ -8,12 +9,14 @@ export function NotificationProvider({ children }) {
   const { isAuthenticated, user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) {
       setNotifications([]);
       setUnreadCount(0);
+      setUnreadMessages(0);
       return;
     }
 
@@ -22,6 +25,7 @@ export function NotificationProvider({ children }) {
       if (res.success) {
         setNotifications(res.data || []);
         setUnreadCount(res.unreadCount || 0);
+        setUnreadMessages(res.unreadMessages || 0);
       }
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
@@ -35,6 +39,20 @@ export function NotificationProvider({ children }) {
     const interval = setInterval(fetchNotifications, 20000);
     return () => clearInterval(interval);
   }, [fetchNotifications, user]);
+
+  // Live chat connection: every pushed event carries this user's unread total
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    socket.connect();
+    const unsubscribe = socket.subscribe((event) => {
+      if (typeof event.unreadMessages === 'number') setUnreadMessages(event.unreadMessages);
+    });
+    return () => {
+      unsubscribe();
+      socket.disconnect();
+    };
+  }, [isAuthenticated, user?.id]);
 
   const markAsRead = async (id) => {
     try {
@@ -61,6 +79,7 @@ export function NotificationProvider({ children }) {
       value={{
         notifications,
         unreadCount,
+        unreadMessages,
         loading,
         fetchNotifications,
         markAsRead,

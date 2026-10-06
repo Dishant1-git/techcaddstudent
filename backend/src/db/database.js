@@ -18,6 +18,7 @@ const defaultSchema = {
   attendance: [],
   complaints: [],
   notifications: [],
+  messages: [],
   audit_logs: [],
 };
 
@@ -233,6 +234,17 @@ class Database {
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     return maxId + 1;
+  }
+
+  // Unread chat messages for a user: admins share one inbox of everything
+  // students/trainers sent, everyone else only counts admin replies to them.
+  countUnreadMessages(user) {
+    if (user.role === 'admin') {
+      return this.count('messages', m => m.sender_role !== 'admin' && !m.read_at);
+    }
+    return this.count('messages', m =>
+      String(m.thread_user_id) === String(user.id) && m.sender_role === 'admin' && !m.read_at
+    );
   }
 
   // Relational Hydration Helpers

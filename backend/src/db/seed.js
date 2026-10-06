@@ -22,6 +22,7 @@ export async function seedDatabase() {
   db.data.attendance = [];
   db.data.complaints = [];
   db.data.notifications = [];
+  db.data.messages = [];
   db.data.audit_logs = [];
   await Promise.all(Object.keys(db.data).map(name => db.mongo.collection(name).deleteMany({})));
 

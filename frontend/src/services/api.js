@@ -132,6 +132,11 @@ export const api = {
   markAllNotificationsRead: () => request('/notifications/read-all', { method: 'PUT' }),
   broadcastNotification: (data) => request('/notifications/broadcast', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Messages (admin <-> student/trainer chat)
+  getConversations: () => request('/messages/conversations'),
+  getMessageThread: (userId) => request(`/messages/thread${userId ? `/${userId}` : ''}`),
+  sendMessage: (body, userId) => request('/messages', { method: 'POST', body: JSON.stringify({ body, user_id: userId }) }),
+
   // Analytics
   getAdminAnalytics: () => request('/analytics/admin'),
   getTrainerAnalytics: () => request('/analytics/trainer'),

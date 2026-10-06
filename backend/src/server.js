@@ -9,6 +9,7 @@ import { db } from './db/database.js';
 import { securityHeaders, sanitizeInput, createRateLimiter } from './middleware/security.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import apiRoutes from './routes/index.js';
+import { attachRealtime } from './realtime.js';
 
 const app = express();
 
@@ -70,6 +71,8 @@ async function startServer(port = config.port) {
     console.log(` Mode:    ${config.nodeEnv}`);
     console.log(` Health:  http://localhost:${port}/api/health`);
     console.log(`=======================================================`);
+    // WebSocket push for chat messages shares the HTTP port
+    attachRealtime(server);
   });
 
   server.on('error', (err) => {
