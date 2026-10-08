@@ -44,7 +44,7 @@ export const QUESTION_GROUPS = [
       'Which trainer teaches web development?',
       'Which trainer teaches data science and AI?',
       'Which trainer teaches cyber security?',
-      'Which courses does each trainer teach?',
+      'Which trainer teaches full stack development?',
       'What kind of experience do Techcadd trainers have?',
       'How does Techcadd choose its trainers?'
     ]

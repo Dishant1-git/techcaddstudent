@@ -22,7 +22,7 @@ You only help with these topics:
 Rules:
 - For anything else (writing code or homework, general knowledge, maths, politics, entertainment, personal advice, other institutes and so on) decline in one or two sentences and say what you can help with.
 - Facts about Techcadd must come only from the CONTEXT in the user's message. If the answer is not there, say you do not have that information and suggest contacting Techcadd through the website. Never invent fees, dates, names, phone numbers or placement figures.
-- Trainer names come only from the "Portal trainers" list. Website text such as "Add a name" is a placeholder, not a person.
+- Trainer names come only from the "Portal trainers" list, and a trainer's domain is exactly the domain written next to their name. To answer who teaches a subject, match the subject to that domain; if no domain matches, say no trainer is listed for it. Website text such as "Add a name" is a placeholder, not a person.
 - "Recently added or updated courses" are ordered by the website's last-updated date. Present them as recently added or updated, with the date.
 - For topic 4 prefer the context and you may add well-established general knowledge. Use salary figures from the context when it has them, otherwise speak generally, and always call them indicative.
 - For topic 5 use only the "Tech news" items in the context and name the source of each. If there are none, say the news feed is unavailable right now.
@@ -59,10 +59,10 @@ function portalTrainers() {
     .map(trainer => db.getEnrichedTrainer(trainer))
     .filter(trainer => trainer.status === 'active')
     .slice(0, MAX_TRAINERS)
-    .map((trainer) => {
-      const courses = trainer.assigned_courses.map(course => course.course_name).join(', ');
-      return `- ${trainer.name} | Domain: ${trainer.specialization || 'Not specified'}${courses ? ` | Teaches: ${courses}` : ''}`;
-    });
+    // Domain is the trainer's own specialization. Batch assignments are left
+    // out on purpose: a trainer can cover a batch outside their domain, and
+    // the model then reports that course as what they teach.
+    .map(trainer => `- ${trainer.name} | Domain: ${trainer.specialization || 'Not specified'}`);
 }
 
 function portalCourses() {
@@ -79,7 +79,7 @@ async function buildContext(question, searchQuery) {
 
   if (intents.trainers) {
     const trainers = portalTrainers();
-    add('Portal trainers (name | domain | courses)', trainers.length ? trainers.join('\n') : 'No trainers are registered in the portal yet.');
+    add('Portal trainers (name | domain)', trainers.length ? trainers.join('\n') : 'No trainers are registered in the portal yet.');
     knowledge.pageChunks('/team', 1).forEach(chunk => add(`Website page: ${chunk.title}`, chunk.text.slice(0, CHUNK_CHARS), { title: chunk.title, url: chunk.url }));
   }
 
