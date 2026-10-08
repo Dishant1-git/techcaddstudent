@@ -14,6 +14,7 @@ import {
   FileCheck2,
   Bell,
   MessageSquare,
+  Sparkles,
   History,
   Settings,
   ShieldCheck,
@@ -33,6 +34,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/student/attendance', label: 'My Attendance', icon: CalendarCheck },
     { to: '/student/complaints', label: 'Report Complaint', icon: AlertOctagon },
     { to: '/student/messages', label: 'Message Admin', icon: MessageSquare, badge: unreadMessages },
+    { to: '/student/assistant', label: 'Techcadd AI', icon: Sparkles },
     { to: '/student/profile', label: 'My Profile', icon: User },
     { to: '/student/notifications', label: 'Notifications', icon: Bell, badge: unreadCount }
   ];
@@ -43,6 +45,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/trainer/students', label: 'My Students', icon: Users },
     { to: '/trainer/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/trainer/messages', label: 'Message Admin', icon: MessageSquare, badge: unreadMessages },
+    { to: '/trainer/assistant', label: 'Techcadd AI', icon: Sparkles },
     { to: '/trainer/profile', label: 'Trainer Profile', icon: User },
     { to: '/trainer/notifications', label: 'Notifications', icon: Bell, badge: unreadCount }
   ];
@@ -57,6 +60,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/admin/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/admin/complaints', label: 'Complaints Hub', icon: AlertOctagon },
     { to: '/admin/messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages },
+    { to: '/admin/assistant', label: 'Techcadd AI', icon: Sparkles },
     { to: '/admin/audit-logs', label: 'Audit Trail', icon: History },
     { to: '/admin/notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
     { to: '/admin/settings', label: 'Portal Settings', icon: Settings }

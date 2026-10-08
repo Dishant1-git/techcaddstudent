@@ -137,6 +137,9 @@ export const api = {
   getMessageThread: (userId) => request(`/messages/thread${userId ? `/${userId}` : ''}`),
   sendMessage: (body, userId) => request('/messages', { method: 'POST', body: JSON.stringify({ body, user_id: userId }) }),
 
+  // AI assistant
+  askAssistant: (message, history = []) => request('/assistant/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+
   // Analytics
   getAdminAnalytics: () => request('/analytics/admin'),
   getTrainerAnalytics: () => request('/analytics/trainer'),

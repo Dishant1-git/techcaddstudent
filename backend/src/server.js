@@ -10,6 +10,7 @@ import { securityHeaders, sanitizeInput, createRateLimiter } from './middleware/
 import { errorHandler } from './middleware/errorHandler.js';
 import apiRoutes from './routes/index.js';
 import { attachRealtime } from './realtime.js';
+import { init as initKnowledge } from './assistant/knowledge.js';
 
 const app = express();
 
@@ -64,6 +65,8 @@ app.use(errorHandler);
 async function startServer(port = config.port) {
   await seedDatabase();
   db.watchChanges();
+  // Website knowledge for the AI assistant loads and refreshes in the background
+  initKnowledge().catch(err => console.error('[Assistant] Knowledge base failed to load:', err.message));
   const server = app.listen(port, '0.0.0.0', () => {
     console.log(`=======================================================`);
     console.log(` Educational Portal Backend is LIVE!`);

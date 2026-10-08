@@ -35,6 +35,7 @@ import { AdminSettings } from './pages/admin/AdminSettings';
 // Shared
 import { NotificationsPage } from './pages/common/NotificationsPage';
 import { MessagesPage } from './pages/common/MessagesPage';
+import { AssistantPage } from './pages/common/AssistantPage';
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
   const { user, role, loading } = useAuth();
@@ -95,6 +96,7 @@ export function App() {
         <Route path="profile" element={<StudentProfile />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
       </Route>
 
       {/* Trainer Portal */}
@@ -113,6 +115,7 @@ export function App() {
         <Route path="profile" element={<TrainerProfile />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
       </Route>
 
       {/* Admin Portal */}
@@ -136,6 +139,7 @@ export function App() {
         <Route path="settings" element={<AdminSettings />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
       </Route>
 
       {/* Catch-all */}
