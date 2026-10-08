@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
+import { ChatDock } from '../chat/ChatDock';
 
 export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,6 +23,9 @@ export function DashboardLayout() {
           </div>
         </main>
       </div>
+
+      {/* Floating AI assistant and admin messages */}
+      <ChatDock />
     </div>
   );
 }

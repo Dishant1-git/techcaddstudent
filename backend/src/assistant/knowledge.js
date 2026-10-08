@@ -9,7 +9,7 @@ const SITEMAP_URL = `${SITE_URL}/sitemap.xml`;
 const COLLECTION = 'kb_pages';
 const USER_AGENT = 'TechcaddPortalAssistant/1.0';
 
-const SKIPPED_PATHS = /^\/(privacy|terms|cookie-policy|refund-policy|disclaimer|sitemap-html)$/;
+const SKIPPED_PATHS = /^\/(privacy|terms|cookie-policy|disclaimer|sitemap-html)$/;
 const COURSE_PATH = /^\/courses\/(?!category\/)[^/]+$/;
 
 const MAX_PAGE_CHARS = 24000;
