@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { db, toTime24 } from '../db/database.js';
+import { db, toTime24, toDateStr, ENROLLMENT_STATUSES } from '../db/database.js';
+import { checkStudentAbsence } from '../absence.js';
 import { requireAuth, requireAdmin, requireStudent, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { resetFailedLogins, validatePasswordPolicy } from '../middleware/security.js';
@@ -28,7 +29,7 @@ export function validateClassChoice({ trainer_id, class_start_time, class_end_ti
 // GET /api/students - List students (Admin sees all; Trainer sees assigned only)
 router.get('/', requireAuth, requireTrainerOrAdmin, (req, res) => {
   try {
-    const { course_id, trainer_id, search, status } = req.query;
+    const { course_id, trainer_id, search, status, enrollment_status } = req.query;
     let students = db.find('students');
 
     // If Trainer, filter to assigned students only!
@@ -50,6 +51,9 @@ router.get('/', requireAuth, requireTrainerOrAdmin, (req, res) => {
 
     if (status) {
       enriched = enriched.filter(s => s.status === status);
+    }
+    if (enrollment_status) {
+      enriched = enriched.filter(s => s.enrollment_status === enrollment_status);
     }
 
     if (search) {
@@ -148,6 +152,67 @@ router.get('/password-requests', requireAuth, requireAdmin, (req, res) => {
   } catch (err) {
     console.error('Fetch password requests error:', err);
     return res.status(500).json({ success: false, message: 'Failed to load password requests.' });
+  }
+});
+
+const ENROLLMENT_LABELS = { running: 'Running', hold: 'On Hold', completed: 'Completed', dropped: 'Dropped' };
+
+// PUT /api/students/:id/enrollment - Admin sets course status: running / hold / completed / dropped
+router.put('/:id/enrollment', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const student = db.findById('students', req.params.id);
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+    const next = req.body?.enrollment_status;
+    if (!ENROLLMENT_STATUSES.includes(next)) {
+      return res.status(400).json({ success: false, message: `Status must be one of: ${ENROLLMENT_STATUSES.join(', ')}.` });
+    }
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) : '';
+    const previous = student.enrollment_status || 'running';
+    if (previous === next) {
+      return res.json({ success: true, message: 'Status unchanged.', data: db.getEnrichedStudent(student) });
+    }
+
+    const updates = {
+      enrollment_status: next,
+      status_history: [
+        ...(student.status_history || []),
+        { from: previous, to: next, note, by: req.user.id, at: new Date().toISOString() }
+      ]
+    };
+    if (next === 'completed') updates.completed_on = toDateStr();
+    if (next === 'running') updates.completed_on = null;
+
+    const updated = db.update('students', student.id, updates);
+    checkStudentAbsence(updated); // closes absence alerts for students no longer running
+
+    const user = db.findById('users', student.user_id);
+    const label = ENROLLMENT_LABELS[next];
+    db.insert('notifications', {
+      user_id: student.user_id,
+      title: `Course Status: ${label}`,
+      message: `The admin changed your course status to "${label}".${note ? ` Note: ${note}` : ''}`,
+      type: 'enrollment_status',
+      link: '/student/profile',
+      is_read: false
+    });
+    const trainer = student.trainer_id ? db.findById('trainers', student.trainer_id) : null;
+    if (trainer) {
+      db.insert('notifications', {
+        user_id: trainer.user_id,
+        title: 'Student Course Status Changed',
+        message: `${user ? user.name : 'A student'} is now "${label}".${note ? ` Note: ${note}` : ''}`,
+        type: 'enrollment_status',
+        link: '/trainer/students',
+        is_read: false
+      });
+    }
+
+    logAudit(req, 'STUDENT_ENROLLMENT_STATUS', `Student ${student.student_id}: ${previous} -> ${next}${note ? ` (${note})` : ''}`);
+    return res.json({ success: true, message: `${user ? user.name : 'Student'} is now ${label}.`, data: db.getEnrichedStudent(updated) });
+  } catch (err) {
+    console.error('Update enrollment status error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to change course status.' });
   }
 });
 
@@ -277,6 +342,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       trainer_id: trainer_id ? Number(trainer_id) : null,
       class_start_time: toTime24(class_start_time),
       class_end_time: toTime24(class_end_time),
+      enrollment_status: 'running',
       phone: phone ? phone.trim() : '',
       address: address ? address.trim() : '',
       emergency_contact: emergency_contact ? emergency_contact.trim() : ''

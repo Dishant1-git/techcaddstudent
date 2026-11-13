@@ -11,6 +11,8 @@ import assistantRoutes from './assistant.js';
 import analyticsRoutes from './analytics.js';
 import auditRoutes from './audit.js';
 import uploadRoutes from './uploads.js';
+import leaveRoutes from './leaves.js';
+import absenceRoutes from './absence.js';
 
 const router = express.Router();
 
@@ -36,5 +38,7 @@ router.use('/assistant', assistantRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/uploads', uploadRoutes);
+router.use('/leaves', leaveRoutes);
+router.use('/absence', absenceRoutes);
 
 export default router;

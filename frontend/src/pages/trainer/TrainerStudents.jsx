@@ -15,6 +15,7 @@ import { api } from '../../services/api';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
+import { EnrollmentBadge, AbsenceTag } from '../../components/common/EnrollmentBadge';
 
 export function TrainerStudents() {
   const { user } = useAuth();
@@ -93,6 +94,17 @@ export function TrainerStudents() {
       key: 'class_timing',
       sortable: true,
       render: (s) => <span className="font-semibold text-xs text-slate-700">{s.class_timing || 'Not set'}</span>
+    },
+    {
+      header: 'Course Status',
+      key: 'enrollment_status',
+      sortable: true,
+      render: (s) => (
+        <div className="flex flex-col items-start gap-1">
+          <EnrollmentBadge status={s.enrollment_status} />
+          <AbsenceTag student={s} />
+        </div>
+      )
     },
     {
       header: 'Contact Phone',

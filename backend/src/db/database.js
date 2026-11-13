@@ -20,7 +20,38 @@ const defaultSchema = {
   messages: [],
   audit_logs: [],
   password_requests: [],
+  leaves: [],
+  absence_alerts: [],
 };
+
+export const ENROLLMENT_STATUSES = ['running', 'hold', 'completed', 'dropped'];
+
+// Days classes run on (0 = Sunday). Override with WORKING_DAYS="1,2,3,4,5".
+export const WORKING_DAYS = new Set(
+  (process.env.WORKING_DAYS || '1,2,3,4,5,6').split(',').map(Number).filter(n => n >= 0 && n <= 6)
+);
+
+// Dates are plain YYYY-MM-DD strings (UTC), matching how attendance dates are stored
+export function toDateStr(date = new Date()) {
+  return date.toISOString().split('T')[0];
+}
+
+export function addDays(dateStr, delta) {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return toDateStr(d);
+}
+
+export function isWorkingDay(dateStr) {
+  return WORKING_DAYS.has(new Date(`${dateStr}T00:00:00.000Z`).getUTCDay());
+}
+
+// Working days between two dates, both inclusive
+export function countWorkingDays(from, to) {
+  let n = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) if (isWorkingDay(d)) n += 1;
+  return n;
+}
 
 // "09:00 AM" / "9:00 am" / "09:00" -> "09:00" (24h), or '' if unparseable
 export function toTime24(value) {
@@ -315,6 +346,39 @@ class Database {
     );
   }
 
+  // The day a student started: account creation, or their first attendance if that is earlier
+  getStudentJoinDate(student) {
+    const created = (student.created_at || '').slice(0, 10) || toDateStr();
+    const first = this.find('attendance', a => String(a.student_id) === String(student.id))
+      .reduce((min, a) => (a.date && a.date < min ? a.date : min), created);
+    return first;
+  }
+
+  getApprovedLeaveOn(studentId, dateStr) {
+    return this.findOne('leaves', l =>
+      String(l.student_id) === String(studentId) &&
+      l.status === 'approved' &&
+      l.from_date <= dateStr && l.to_date >= dateStr
+    );
+  }
+
+  // Consecutive working days without attendance, counting back from yesterday (today is not over yet).
+  // A day with approved leave or any non-rejected attendance ends the streak.
+  getAbsenceStreak(student, todayStr = toDateStr()) {
+    const joinDate = this.getStudentJoinDate(student);
+    const attended = new Set(
+      this.find('attendance', a => String(a.student_id) === String(student.id) && a.status !== 'Rejected').map(a => a.date)
+    );
+    const dates = [];
+    let day = addDays(todayStr, -1);
+    for (let i = 0; i < 90 && day >= joinDate; i += 1, day = addDays(day, -1)) {
+      if (!isWorkingDay(day)) continue;
+      if (attended.has(day) || this.getApprovedLeaveOn(student.id, day)) break;
+      dates.unshift(day);
+    }
+    return { days: dates.length, dates, first: dates[0] || null, last: dates[dates.length - 1] || null };
+  }
+
   // Students who picked this trainer
   getTrainerStudents(trainerId) {
     return this.find('students', s => String(s.trainer_id) === String(trainerId));
@@ -356,6 +420,12 @@ class Database {
     const pendingAttendance = attendanceRecords.filter(a => a.status === 'Pending Verification').length;
     const rejectedAttendance = attendanceRecords.filter(a => a.status === 'Rejected').length;
     const attendancePercentage = totalAttendance > 0 ? Math.round((verifiedAttendance / totalAttendance) * 100) : 100;
+    const lastAttendance = attendanceRecords
+      .filter(a => a.status !== 'Rejected')
+      .reduce((max, a) => (a.date > max ? a.date : max), '');
+    const todayStr = toDateStr();
+    const enrollmentStatus = ENROLLMENT_STATUSES.includes(student.enrollment_status) ? student.enrollment_status : 'running';
+    const streak = enrollmentStatus === 'running' ? this.getAbsenceStreak(student, todayStr) : { days: 0 };
 
     return {
       ...student,
@@ -369,6 +439,11 @@ class Database {
       class_timing: formatClassTiming(student.class_start_time, student.class_end_time),
       trainer_name: trainerUser ? trainerUser.name : 'Not Selected',
       trainer_specialization: trainer ? trainer.specialization : '',
+      enrollment_status: enrollmentStatus,
+      joined_on: this.getStudentJoinDate(student),
+      last_attendance_date: lastAttendance || null,
+      absent_streak: streak.days,
+      on_leave_today: !!this.getApprovedLeaveOn(student.id, todayStr),
       trainer_email: trainerUser ? trainerUser.email : '',
       stats: {
         totalClasses: totalAttendance,

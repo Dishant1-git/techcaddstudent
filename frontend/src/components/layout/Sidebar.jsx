@@ -18,7 +18,9 @@ import {
   ShieldCheck,
   CheckCircle,
   PlusCircle,
-  X
+  X,
+  CalendarOff,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -50,6 +52,8 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/admin/trainers', label: 'Trainers', icon: Users },
     { to: '/admin/courses', label: 'Courses', icon: BookOpen },
     { to: '/admin/attendance', label: 'Attendance Oversight', icon: CalendarCheck },
+    { to: '/admin/absences', label: 'Absence & Leaves', icon: CalendarOff },
+    { to: '/admin/student-report', label: 'Student Report', icon: FileSpreadsheet },
     { to: '/admin/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/admin/complaints', label: 'Complaints Hub', icon: AlertOctagon },
     { to: '/admin/audit-logs', label: 'Audit Trail', icon: History },

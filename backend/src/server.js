@@ -10,6 +10,7 @@ import { securityHeaders, sanitizeInput, createRateLimiter } from './middleware/
 import { errorHandler } from './middleware/errorHandler.js';
 import apiRoutes from './routes/index.js';
 import { attachRealtime } from './realtime.js';
+import { startAbsenceMonitor } from './absence.js';
 import { init as initKnowledge } from './assistant/knowledge.js';
 
 const app = express();
@@ -65,6 +66,8 @@ app.use(errorHandler);
 async function startServer(port = config.port) {
   await seedDatabase();
   db.watchChanges();
+  // Alerts admins and trainers about students absent several working days in a row
+  startAbsenceMonitor();
   // Website knowledge for the AI assistant loads and refreshes in the background
   initKnowledge().catch(err => console.error('[Assistant] Knowledge base failed to load:', err.message));
   const server = app.listen(port, '0.0.0.0', () => {

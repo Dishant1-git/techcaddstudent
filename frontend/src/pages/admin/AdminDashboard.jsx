@@ -187,6 +187,24 @@ export function AdminDashboard() {
           accent="emerald"
           description="Overall institution average"
         />
+        <Link to="/admin/absences" className="block">
+          <StatCard
+            title="Absent 3+ Days"
+            value={cards.openAbsenceAlerts ?? 0}
+            icon={AlertOctagon}
+            accent={cards.openAbsenceAlerts > 0 ? "rose" : "emerald"}
+            description={`${cards.pendingLeaves ?? 0} leave request(s) pending`}
+          />
+        </Link>
+        <Link to="/admin/student-report" className="block">
+          <StatCard
+            title="Course Status"
+            value={`${cards.runningStudents ?? 0} running`}
+            icon={GraduationCap}
+            accent="purple"
+            description={`${cards.holdStudents ?? 0} on hold • ${cards.completedStudents ?? 0} completed`}
+          />
+        </Link>
         <StatCard
           title="Open Complaints"
           value={cards.openComplaints}

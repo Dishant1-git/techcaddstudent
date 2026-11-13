@@ -30,6 +30,16 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
     const sessionName = session && session.trim() ? session.trim() : 'Class';
     const targetDate = date ? date.trim() : formatDate();
 
+    const enrollment = student.enrollment_status || 'running';
+    if (enrollment !== 'running') {
+      const label = { hold: 'on hold', completed: 'completed', dropped: 'dropped' }[enrollment] || enrollment;
+      return res.status(400).json({
+        success: false,
+        code: 'ENROLLMENT_NOT_RUNNING',
+        message: `Your course is marked as ${label}, so attendance cannot be marked. Please contact the admin.`
+      });
+    }
+
     // The student picks their own trainer and class timing
     const trainerId = student.trainer_id || null;
     const courseId = student.course_id || null;

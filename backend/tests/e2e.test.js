@@ -277,6 +277,42 @@ async function runE2ETests() {
       assert(!after.data.data.some(r => r.email === testEmail), 'Request is cleared after the reset');
     }
 
+    // 9.2 Leaves, course status, absence alerts and the student report sheet
+    console.log('\n--- Testing Leaves, Course Status & Student Report ---');
+    const day = (offset) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().split('T')[0]; };
+    const leaveReq = await req('/leaves', 'POST', { from_date: day(5), to_date: day(6), reason: 'Family function' }, studentToken);
+    assert(leaveReq.status === 201 && leaveReq.data.data.status === 'pending', 'Student requests leave -> pending');
+    const overlapReq = await req('/leaves', 'POST', { from_date: day(6), to_date: day(7), reason: 'Again' }, studentToken);
+    assert(overlapReq.status === 400, 'Overlapping leave requests are rejected');
+    const pendingLeaves = await req('/leaves?status=pending', 'GET', null, adminToken);
+    assert(pendingLeaves.ok && pendingLeaves.data.data.some(l => l.id === leaveReq.data.data.id), 'Admin sees pending leave requests');
+    const approveLeave = await req(`/leaves/${leaveReq.data.data.id}/approve`, 'POST', {}, adminToken);
+    assert(approveLeave.ok && approveLeave.data.data.status === 'approved', 'Admin approves the leave');
+    const myLeaves = await req('/leaves/my', 'GET', null, studentToken);
+    assert(myLeaves.ok && myLeaves.data.data[0]?.status === 'approved', 'Student sees approved leave');
+
+    const johnProfile = (await req('/students/me', 'GET', null, studentToken)).data.data;
+    const holdRes = await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'hold', note: 'Fees pending' }, adminToken);
+    assert(holdRes.ok && holdRes.data.data.enrollment_status === 'hold', 'Admin puts student on hold');
+    const blockedMark = await req('/attendance/mark', 'POST', { session: `Hold Test ${Date.now()}` }, studentToken);
+    assert(blockedMark.status === 400 && blockedMark.data.code === 'ENROLLMENT_NOT_RUNNING', 'Student on hold cannot mark attendance');
+    const badStatus = await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'paused' }, adminToken);
+    assert(badStatus.status === 400, 'Unknown course status is rejected');
+    await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'running' }, adminToken);
+
+    const adminAlerts = await req('/absence/alerts', 'GET', null, adminToken);
+    const trainerAlerts = await req('/absence/alerts', 'GET', null, trainerToken);
+    const studentAlerts = await req('/absence/alerts', 'GET', null, studentToken);
+    assert(adminAlerts.ok && trainerAlerts.ok && studentAlerts.status === 403, 'Absence alerts visible to admin and trainer only');
+    const checkNow = await req('/absence/check', 'POST', null, adminToken);
+    assert(checkNow.ok, 'Admin can run the absence check on demand');
+
+    const report = await req('/analytics/student-report', 'GET', null, adminToken);
+    assert(report.ok && report.data.data.summary.totalStudents > 0 && Array.isArray(report.data.data.byCourse) && report.data.data.students[0]?.enrollment_status,
+      'Admin generates the student report sheet with summary, course breakdown and student rows');
+    const studentReport = await req('/analytics/student-report', 'GET', null, studentToken);
+    assert(studentReport.status === 403, 'Students cannot access the student report sheet');
+
     // 10. Real-Time Notifications
     console.log('\n--- Testing Real-Time Notifications ---');
     const studentNotifs = await req('/notifications', 'GET', null, studentToken);

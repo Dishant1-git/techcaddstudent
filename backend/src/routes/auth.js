@@ -94,6 +94,7 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       trainer_id: classChoice.trainer.id,
       class_start_time: classChoice.start,
       class_end_time: classChoice.end,
+      enrollment_status: 'running',
       phone: user.phone,
       address: '',
       emergency_contact: ''

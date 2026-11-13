@@ -66,6 +66,7 @@ export const api = {
   getStudentMe: () => request('/students/me'),
   updateMyClass: (data) => request('/students/me/class', { method: 'PUT', body: JSON.stringify(data) }),
   getPasswordRequests: () => request('/students/password-requests'),
+  setEnrollmentStatus: (id, enrollment_status, note) => request(`/students/${id}/enrollment`, { method: 'PUT', body: JSON.stringify({ enrollment_status, note }) }),
   resetStudentPassword: (id, password) => request(`/students/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
   getStudent: (id) => request(`/students/${id}`),
   createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
@@ -138,6 +139,21 @@ export const api = {
 
   // AI assistant
   askAssistant: (message, history = []) => request('/assistant/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
+
+  // Leaves & absence alerts
+  requestLeave: (data) => request('/leaves', { method: 'POST', body: JSON.stringify(data) }),
+  getMyLeaves: () => request('/leaves/my'),
+  getLeaves: (status) => request(`/leaves${status ? `?status=${status}` : ''}`),
+  grantLeave: (data) => request('/leaves/grant', { method: 'POST', body: JSON.stringify(data) }),
+  approveLeave: (id, admin_note) => request(`/leaves/${id}/approve`, { method: 'POST', body: JSON.stringify({ admin_note }) }),
+  rejectLeave: (id, admin_note) => request(`/leaves/${id}/reject`, { method: 'POST', body: JSON.stringify({ admin_note }) }),
+  getAbsenceAlerts: (status = 'open') => request(`/absence/alerts?status=${status}`),
+  runAbsenceCheck: () => request('/absence/check', { method: 'POST' }),
+  dismissAbsenceAlert: (id) => request(`/absence/alerts/${id}/dismiss`, { method: 'POST' }),
+  getStudentReport: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/analytics/student-report${query ? `?${query}` : ''}`);
+  },
 
   // Analytics
   getAdminAnalytics: () => request('/analytics/admin'),

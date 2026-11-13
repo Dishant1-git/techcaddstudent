@@ -30,6 +30,8 @@ import { AdminReports } from './pages/admin/AdminReports';
 import { AdminComplaints } from './pages/admin/AdminComplaints';
 import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
 import { AdminSettings } from './pages/admin/AdminSettings';
+import { AdminAbsences } from './pages/admin/AdminAbsences';
+import { AdminStudentReport } from './pages/admin/AdminStudentReport';
 
 // Shared
 import { NotificationsPage } from './pages/common/NotificationsPage';
@@ -126,6 +128,8 @@ export function App() {
         <Route path="courses" element={<AdminCourses />} />
         <Route path="attendance" element={<AdminAttendance />} />
         <Route path="reports" element={<AdminReports />} />
+        <Route path="absences" element={<AdminAbsences />} />
+        <Route path="student-report" element={<AdminStudentReport />} />
         <Route path="complaints" element={<AdminComplaints />} />
         <Route path="audit-logs" element={<AdminAuditLogs />} />
         <Route path="settings" element={<AdminSettings />} />

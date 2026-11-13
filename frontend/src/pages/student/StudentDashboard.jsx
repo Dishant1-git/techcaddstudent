@@ -22,6 +22,7 @@ import { api } from '../../services/api';
 import { AttendanceGauge } from '../../components/common/AttendanceGauge';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
+import { EnrollmentBadge } from '../../components/common/EnrollmentBadge';
 
 export function StudentDashboard() {
   const { user, profile, refreshProfile } = useAuth();
@@ -152,6 +153,10 @@ export function StudentDashboard() {
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Program / Course</span>
                 <span className="font-semibold text-slate-800 text-right">{student?.course_name || 'Not Enrolled'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-medium">Course Status</span>
+                <EnrollmentBadge status={student?.enrollment_status} />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Class Timing</span>

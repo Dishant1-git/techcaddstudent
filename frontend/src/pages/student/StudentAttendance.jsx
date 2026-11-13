@@ -20,6 +20,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { AttendanceGauge } from '../../components/common/AttendanceGauge';
 import { Modal } from '../../components/common/Modal';
 import { ExportReports } from '../../components/common/ExportReports';
+import { StudentLeaves } from '../../components/student/StudentLeaves';
+import { enrollmentLabel } from '../../components/common/EnrollmentBadge';
 
 export function StudentAttendance() {
   const { user, profile } = useAuth();
@@ -213,6 +215,14 @@ export function StudentAttendance() {
           </div>
         </div>
       </div>
+
+      {profile?.enrollment_status && profile.enrollment_status !== 'running' && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-sm text-amber-900">
+          Your course status is <strong>{enrollmentLabel(profile.enrollment_status)}</strong>, so you cannot mark attendance right now. Please contact the admin if this is wrong.
+        </div>
+      )}
+
+      <StudentLeaves />
 
       {/* Attendance Records Data Table */}
       <DataTable

@@ -25,6 +25,7 @@ import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { ENROLLMENT_OPTIONS, AbsenceTag } from '../../components/common/EnrollmentBadge';
 
 export function AdminStudents() {
   const toast = useToast();
@@ -244,6 +245,29 @@ export function AdminStudents() {
     }
   };
 
+  // Course status: running / hold / completed / dropped
+  const [statusChange, setStatusChange] = useState(null);
+  const [statusNote, setStatusNote] = useState('');
+
+  const handleEnrollmentChange = async (e) => {
+    e.preventDefault();
+    if (!statusChange) return;
+    try {
+      setActionLoading(true);
+      const res = await api.setEnrollmentStatus(statusChange.student.id, statusChange.value, statusNote.trim());
+      if (res.success) {
+        toast.success(res.message, 'Course Status Updated');
+        setStudents(prev => prev.map(s => s.id === res.data.id ? res.data : s));
+        setStatusChange(null);
+        setStatusNote('');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to change course status.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleDeactivate = async () => {
     if (!deactivatingStudent) return;
     try {
@@ -323,6 +347,26 @@ export function AdminStudents() {
       key: 'trainer_name',
       sortable: true,
       render: (s) => <span className="font-medium text-xs text-indigo-700">{s.trainer_name || 'Not Selected'}</span>
+    },
+    {
+      header: 'Course Status',
+      key: 'enrollment_status',
+      sortable: true,
+      render: (s) => (
+        <div className="space-y-1">
+          <select
+            value={s.enrollment_status || 'running'}
+            onChange={(e) => { setStatusChange({ student: s, value: e.target.value }); setStatusNote(''); }}
+            className={`px-2 py-1 rounded-lg border text-xs font-bold cursor-pointer ${
+              { running: 'bg-emerald-50 text-emerald-700 border-emerald-200', hold: 'bg-amber-50 text-amber-700 border-amber-200', completed: 'bg-indigo-50 text-indigo-700 border-indigo-200', dropped: 'bg-slate-100 text-slate-600 border-slate-300' }[s.enrollment_status || 'running']
+            }`}
+            title="Change course status"
+          >
+            {ENROLLMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div><AbsenceTag student={s} /></div>
+        </div>
+      )
     },
     {
       header: 'Attendance %',
@@ -561,8 +605,13 @@ export function AdminStudents() {
         searchFields={['name', 'student_id', 'email', 'domain', 'trainer_name', 'course_name', 'phone']}
         filters={[
           {
+            key: 'enrollment_status',
+            label: 'Course Status',
+            options: ENROLLMENT_OPTIONS
+          },
+          {
             key: 'status',
-            label: 'Status',
+            label: 'Account',
             options: [
               { value: 'active', label: 'Active' },
               { value: 'pending_approval', label: 'Pending Approval' },
@@ -574,6 +623,38 @@ export function AdminStudents() {
         emptyMessage="No students found."
       />
       )}
+
+      {/* Course Status Change Modal */}
+      <Modal
+        isOpen={!!statusChange}
+        onClose={() => setStatusChange(null)}
+        title={`Change Course Status: ${statusChange?.student?.name || ''}`}
+        subtitle={statusChange ? `New status: ${ENROLLMENT_OPTIONS.find(o => o.value === statusChange.value)?.label}` : ''}
+      >
+        <form onSubmit={handleEnrollmentChange} className="space-y-4">
+          <p className="text-xs text-slate-600">
+            {statusChange?.value === 'running'
+              ? 'The student can mark attendance again and absence alerts resume.'
+              : 'The student will not be able to mark attendance and absence alerts stop. The student and trainer are notified.'}
+          </p>
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Note (optional)
+            <input
+              type="text"
+              value={statusNote}
+              onChange={(e) => setStatusNote(e.target.value)}
+              placeholder="e.g. Fees pending, course finished, moved city"
+              className="mt-1.5 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm normal-case tracking-normal font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            />
+          </label>
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <button type="button" onClick={() => setStatusChange(null)} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={actionLoading} className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
+              Save Status
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Admin Change Password Modal */}
       <Modal
