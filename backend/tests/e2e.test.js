@@ -105,6 +105,11 @@ async function runE2ETests() {
     const noProgramReg = await req('/auth/register', 'POST', { name: 'No Program', email: `no.program.${Date.now()}@portal.edu`, password: 'password123', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
     assert(noProgramReg.status === 400, 'Registration requires choosing Course/Training and duration');
 
+    const courseReg = await req('/auth/register', 'POST', { name: 'Course Only', email: `course.only.${Date.now()}@portal.edu`, password: 'password123', program_type: 'course', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(courseReg.status === 201, 'Course registration needs no duration');
+    const trainingNoDuration = await req('/auth/register', 'POST', { name: 'Training No Duration', email: `training.nd.${Date.now()}@portal.edu`, password: 'password123', program_type: 'training', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(trainingNoDuration.status === 400, 'Training registration requires a duration');
+
     const classUpdate = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' }, studentToken);
     assert(classUpdate.ok && classUpdate.data.data.class_timing === '10:00 AM - 12:00 PM', 'Student updates own trainer and class timing');
     const badTiming = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '12:00', class_end_time: '10:00' }, studentToken);

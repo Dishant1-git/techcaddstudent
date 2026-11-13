@@ -228,11 +228,15 @@ export function Register() {
                 </datalist>
               </Field>
 
+              <div>
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Joining for</p>
+                <ProgramFields value={program} onChange={setProgram} />
+              </div>
+
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
                 <p className="text-xs font-bold text-indigo-900">Your class</p>
-                <ProgramFields value={program} onChange={setProgram} />
                 <ClassDetailsFields value={classDetails} onChange={setClassDetails} />
-                <p className="text-[11px] text-slate-500">You can change these later from your profile.</p>
+                <p className="text-[11px] text-slate-500">You can change your trainer and timing later from your profile.</p>
               </div>
 
               <Field label="Password" icon={Lock}>

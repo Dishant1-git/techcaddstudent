@@ -11,7 +11,9 @@ const router = express.Router();
 // Course or training, and its length (45 days / 6 months / 120 hours)
 export function validateProgram({ program_type, program_duration } = {}) {
   if (!PROGRAM_TYPES[program_type]) return { error: 'Please choose whether this is a Course or a Training.' };
-  if (!PROGRAM_DURATIONS[program_duration]) return { error: 'Please choose the duration: 45 Days, 6 Months, or 120 Hours.' };
+  // Only trainings have a fixed length; a course has none
+  if (program_type === 'course') return { program_type, program_duration: null };
+  if (!PROGRAM_DURATIONS[program_duration]) return { error: 'Please choose the training duration: 45 Days, 6 Months, or 120 Hours.' };
   return { program_type, program_duration };
 }
 
@@ -407,8 +409,9 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 
     const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, program_type, program_duration, phone, address, emergency_contact, status, avatar } = req.body;
 
+    let program = null;
     if (program_type !== undefined || program_duration !== undefined) {
-      const program = validateProgram({
+      program = validateProgram({
         program_type: program_type ?? student.program_type,
         program_duration: program_duration ?? student.program_duration
       });
@@ -443,8 +446,10 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (trainer_id !== undefined) studentUpdates.trainer_id = trainer_id ? Number(trainer_id) : null;
     if (class_start_time !== undefined) studentUpdates.class_start_time = toTime24(class_start_time);
     if (class_end_time !== undefined) studentUpdates.class_end_time = toTime24(class_end_time);
-    if (program_type !== undefined) studentUpdates.program_type = program_type;
-    if (program_duration !== undefined) studentUpdates.program_duration = program_duration;
+    if (program) {
+      studentUpdates.program_type = program.program_type;
+      studentUpdates.program_duration = program.program_duration;
+    }
     if (phone !== undefined) studentUpdates.phone = phone.trim();
     if (address !== undefined) studentUpdates.address = address.trim();
     if (emergency_contact !== undefined) studentUpdates.emergency_contact = emergency_contact.trim();
