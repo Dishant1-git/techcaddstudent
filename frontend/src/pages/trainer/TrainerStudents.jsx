@@ -16,6 +16,8 @@ import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { EnrollmentBadge, AbsenceTag } from '../../components/common/EnrollmentBadge';
+import { TrainerLeaves } from '../../components/trainer/TrainerLeaves';
+import { EnrollmentStatusControl } from '../../components/common/EnrollmentStatusControl';
 
 export function TrainerStudents() {
   const { user } = useAuth();
@@ -96,12 +98,26 @@ export function TrainerStudents() {
       render: (s) => <span className="font-semibold text-xs text-slate-700">{s.class_timing || 'Not set'}</span>
     },
     {
+      header: 'Program',
+      key: 'program_label',
+      sortable: true,
+      render: (s) => (
+        <div className="text-xs">
+          <span className={`font-bold ${s.program_type ? 'text-indigo-700' : 'text-slate-400'}`}>{s.program_label}</span>
+          {s.expected_end_date && <div className="text-[10px] text-slate-400">Ends ~{s.expected_end_date}</div>}
+        </div>
+      )
+    },
+    {
       header: 'Course Status',
       key: 'enrollment_status',
       sortable: true,
       render: (s) => (
         <div className="flex flex-col items-start gap-1">
-          <EnrollmentBadge status={s.enrollment_status} />
+          <EnrollmentStatusControl
+            student={s}
+            onUpdated={(updated) => setStudents(prev => prev.map(x => x.id === updated.id ? updated : x))}
+          />
           <AbsenceTag student={s} />
         </div>
       )
@@ -174,8 +190,8 @@ export function TrainerStudents() {
       <DataTable
         columns={columns}
         data={students}
-        searchPlaceholder="Search student name, ID, or class time..."
-        searchFields={['name', 'student_id', 'email', 'class_timing', 'phone']}
+        searchPlaceholder="Search student name, ID, program, or class time..."
+        searchFields={['name', 'student_id', 'email', 'class_timing', 'phone', 'program_label']}
         filters={[
           {
             key: 'status',
@@ -188,6 +204,8 @@ export function TrainerStudents() {
         ]}
         emptyMessage="No assigned students found."
       />
+
+      <TrainerLeaves />
 
       {/* Student Details & Attendance Log Modal */}
       {selectedStudent && (
@@ -202,6 +220,30 @@ export function TrainerStudents() {
           maxWidth="max-w-3xl"
         >
           <div className="space-y-4 text-xs">
+            {/* Program */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <span className="text-slate-400 font-medium">Program</span>
+                <p className="font-bold text-slate-900 mt-0.5">{selectedStudent.program_label}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Started</span>
+                <p className="font-bold text-slate-900 mt-0.5 font-mono">{selectedStudent.joined_on || '—'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Expected End</span>
+                <p className="font-bold text-slate-900 mt-0.5 font-mono">{selectedStudent.expected_end_date || '—'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">{selectedStudent.program_duration === '120_hours' ? 'Hours Done' : 'Course Status'}</span>
+                <p className="font-bold text-slate-900 mt-0.5">
+                  {selectedStudent.program_duration === '120_hours'
+                    ? `${selectedStudent.hours_completed ?? 0} / 120 hrs`
+                    : <EnrollmentBadge status={selectedStudent.enrollment_status} />}
+                </p>
+              </div>
+            </div>
+
             {/* Quick Metrics */}
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-100 text-center">

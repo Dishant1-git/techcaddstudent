@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, formatClassTiming } from '../db/database.js';
+import { db, formatClassTiming, toDateStr, toTimeStr } from '../db/database.js';
 import { requireAuth, requireStudent, requireTrainer, requireAdmin, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 
@@ -7,11 +7,11 @@ const router = express.Router();
 
 // Helper to format time (e.g. 09:15 AM)
 function formatTime(date = new Date()) {
-  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return toTimeStr(date);
 }
 
 function formatDate(date = new Date()) {
-  return date.toISOString().split('T')[0];
+  return toDateStr(date);
 }
 
 // -------------------------------------------------------------

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { formatTime } from '../../utils/time';
 
 export function Navbar({ onToggleSidebar }) {
   const { user, role, logout } = useAuth();
@@ -136,7 +137,7 @@ export function Navbar({ onToggleSidebar }) {
                           <div className="flex items-start justify-between gap-2">
                             <span className="font-bold text-slate-900">{notif.title}</span>
                             <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                              {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatTime(notif.created_at)}
                             </span>
                           </div>
                           <p className="mt-1 text-slate-600 leading-relaxed">{notif.message}</p>

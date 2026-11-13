@@ -8,12 +8,9 @@ import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { DataTable } from '../../components/common/DataTable';
 import { EnrollmentBadge, enrollmentLabel, ENROLLMENT_OPTIONS } from '../../components/common/EnrollmentBadge';
+import { todayIST, formatDateTime } from '../../utils/time';
 
-const isoDay = (offset = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().split('T')[0];
-};
+const isoDay = (offset = 0) => todayIST(offset);
 
 const PRESETS = [
   { label: 'Last 7 days', from: () => isoDay(-6) },
@@ -53,6 +50,9 @@ export function AdminStudentReport() {
     'Phone': s.phone || '',
     'Course': s.course_name,
     'Domain': s.domain || '',
+    'Program': s.program_label,
+    'Expected End': s.expected_end_date || '',
+    'Hours Done (120h)': s.program_duration === '120_hours' ? (s.hours_completed ?? 0) : '',
     'Trainer': s.trainer_name,
     'Class Time': s.class_timing || '',
     'Joined On': s.joined_on || '',
@@ -87,7 +87,7 @@ export function AdminStudentReport() {
       const summaryRows = [
         ['Student Report', ''],
         ['Period', periodText],
-        ['Generated', new Date(report.generated_at).toLocaleString()],
+        ['Generated', formatDateTime(report.generated_at)],
         [],
         ['Total students', summary.totalStudents],
         ['New joined in period', summary.newJoined],
@@ -115,6 +115,7 @@ export function AdminStudentReport() {
       add(studentSheetRows(newJoined), 'New Joinings');
       add(studentSheetRows(students.filter(s => s.enrollment_status === 'completed')), 'Completed');
       add(studentSheetRows(students.filter(s => s.absent_streak >= 3 || (s.period_percentage !== null && s.period_percentage < 75))), 'Needs Attention');
+      add(groupRows(report.byProgram || [], 'Program'), 'By Program');
       add(groupRows(report.byCourse, 'Course'), 'By Course');
       add(groupRows(report.byTrainer, 'Trainer'), 'By Trainer');
       add(report.monthly.map(m => ({ Month: m.month, 'New Joined': m.joined, Completed: m.completed })), 'Monthly');
@@ -136,7 +137,7 @@ export function AdminStudentReport() {
       doc.text('Student Report', 14, 18);
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Period: ${periodText}  |  Generated: ${new Date(report.generated_at).toLocaleString()}`, 14, 25);
+      doc.text(`Period: ${periodText}  |  Generated: ${formatDateTime(report.generated_at)}`, 14, 25);
 
       doc.autoTable({
         startY: 31,
@@ -145,6 +146,15 @@ export function AdminStudentReport() {
         theme: 'grid',
         headStyles: { fillColor: [79, 70, 229] },
         styles: { fontSize: 9, halign: 'center' }
+      });
+
+      doc.autoTable({
+        startY: doc.lastAutoTable.finalY + 8,
+        head: [['Program', 'Students', 'New', 'Running', 'Hold', 'Completed', 'Dropped', 'Attendance']],
+        body: (report.byProgram || []).map(g => [g.name, g.total, g.new_joined, g.running, g.hold, g.completed, g.dropped, pct(g.attendance_percentage)]),
+        theme: 'striped',
+        headStyles: { fillColor: [51, 65, 85] },
+        styles: { fontSize: 8 }
       });
 
       doc.autoTable({
@@ -158,8 +168,8 @@ export function AdminStudentReport() {
 
       doc.autoTable({
         startY: doc.lastAutoTable.finalY + 8,
-        head: [['ID', 'Name', 'Course', 'Trainer', 'Class Time', 'Joined', 'Status', 'Classes', 'Attendance', 'Overall', 'Absent Days']],
-        body: students.map(s => [s.student_id, s.name, s.course_name, s.trainer_name, s.class_timing || '', s.joined_on || '', enrollmentLabel(s.enrollment_status), s.period_classes, pct(s.period_percentage), `${s.overall_percentage}%`, s.absent_streak]),
+        head: [['ID', 'Name', 'Program', 'Course', 'Trainer', 'Class Time', 'Joined', 'Status', 'Classes', 'Attendance', 'Overall', 'Absent Days']],
+        body: students.map(s => [s.student_id, s.name, s.program_label, s.course_name, s.trainer_name, s.class_timing || '', s.joined_on || '', enrollmentLabel(s.enrollment_status), s.period_classes, pct(s.period_percentage), `${s.overall_percentage}%`, s.absent_streak]),
         theme: 'striped',
         headStyles: { fillColor: [79, 70, 229] },
         styles: { fontSize: 7 }
@@ -186,11 +196,12 @@ export function AdminStudentReport() {
       )
     },
     {
-      header: 'Course & Trainer',
-      key: 'course_name',
+      header: 'Program & Trainer',
+      key: 'program_label',
       sortable: true,
       render: (s) => (
         <div className="text-xs">
+          <div className="font-bold text-indigo-700">{s.program_label}</div>
           <div className="font-semibold text-slate-800">{s.course_name}</div>
           <div className="text-slate-500">{s.trainer_name}{s.class_timing ? ` • ${s.class_timing}` : ''}</div>
         </div>
@@ -298,6 +309,8 @@ export function AdminStudentReport() {
             ))}
           </div>
 
+          <GroupTable title="By Program (Course / Training)" label="Program" rows={report?.byProgram || []} />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <GroupTable title="By Course" label="Course" rows={report?.byCourse || []} />
             <GroupTable title="By Trainer" label="Trainer" rows={report?.byTrainer || []} />
@@ -328,7 +341,7 @@ export function AdminStudentReport() {
             columns={columns}
             data={students}
             searchPlaceholder="Search student, course, or trainer..."
-            searchFields={['name', 'student_id', 'email', 'course_name', 'trainer_name']}
+            searchFields={['name', 'student_id', 'email', 'course_name', 'trainer_name', 'program_label']}
             filters={[{ key: 'enrollment_status', label: 'Course Status', options: ENROLLMENT_OPTIONS }]}
             emptyMessage="No students found."
           />

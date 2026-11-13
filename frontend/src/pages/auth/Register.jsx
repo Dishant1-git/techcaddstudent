@@ -18,12 +18,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { ClassDetailsFields, validateClassDetails } from '../../components/common/ClassDetailsFields';
+import { ProgramFields, validateProgram } from '../../components/common/ProgramFields';
 
 export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [domain, setDomain] = useState('');
+  const [program, setProgram] = useState({ program_type: '', program_duration: '' });
   const [classDetails, setClassDetails] = useState({ trainer_id: '', class_start_time: '', class_end_time: '' });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -51,6 +53,12 @@ export function Register() {
       return;
     }
 
+    const programError = validateProgram(program);
+    if (programError) {
+      toast.warning(programError);
+      return;
+    }
+
     const classError = validateClassDetails(classDetails);
     if (classError) {
       toast.warning(classError);
@@ -59,7 +67,7 @@ export function Register() {
 
     setLoading(true);
     try {
-      const res = await registerStudent({ name, email, phone, domain, password, ...classDetails });
+      const res = await registerStudent({ name, email, phone, domain, password, ...program, ...classDetails });
       if (res && res.pendingApproval) {
         setSubmittedPending(true);
       }
@@ -222,6 +230,7 @@ export function Register() {
 
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
                 <p className="text-xs font-bold text-indigo-900">Your class</p>
+                <ProgramFields value={program} onChange={setProgram} />
                 <ClassDetailsFields value={classDetails} onChange={setClassDetails} />
                 <p className="text-[11px] text-slate-500">You can change these later from your profile.</p>
               </div>

@@ -5,7 +5,7 @@ import { requireAuth, requireAdmin, requireTrainer, requireStudent } from '../mi
 const router = express.Router();
 
 function formatDate(date = new Date()) {
-  return date.toISOString().split('T')[0];
+  return toDateStr(date);
 }
 
 // GET /api/analytics/admin - Comprehensive Admin Dashboard Analytics
@@ -164,6 +164,11 @@ router.get('/student-report', requireAuth, requireAdmin, (req, res) => {
         phone: s.phone,
         course_name: s.course_name,
         domain: s.domain,
+        program_label: s.program_label,
+        program_type: s.program_type,
+        program_duration: s.program_duration,
+        expected_end_date: s.expected_end_date,
+        hours_completed: s.hours_completed,
         trainer_name: s.trainer_name,
         class_timing: s.class_timing,
         joined_on: s.joined_on,
@@ -245,6 +250,7 @@ router.get('/student-report', requireAuth, requireAdmin, (req, res) => {
         },
         byCourse: group('course_name'),
         byTrainer: group('trainer_name'),
+        byProgram: group('program_label'),
         monthly: Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)),
         students: rows.sort((a, b) => (b.joined_on || '').localeCompare(a.joined_on || ''))
       }

@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from '../../context/ToastContext';
+import { todayIST, formatDateTime } from '../../utils/time';
 
 export function ExportReports({
   title = 'Attendance Report',
@@ -41,7 +42,7 @@ export function ExportReports({
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement('a');
       link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `${filename}_${todayIST()}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -80,7 +81,7 @@ export function ExportReports({
       const ws = XLSX.utils.json_to_sheet(excelData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-      XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `${filename}_${todayIST()}.xlsx`);
 
       toast.success('Excel workbook exported successfully!');
       setIsOpen(false);
@@ -107,7 +108,7 @@ export function ExportReports({
 
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Generated on: ${new Date().toLocaleString()} | Total Records: ${records.length}`, 14, 28);
+      doc.text(`Generated on: ${formatDateTime(new Date())} | Total Records: ${records.length}`, 14, 28);
 
       if (summary) {
         doc.setFontSize(10);
@@ -140,7 +141,7 @@ export function ExportReports({
         alternateRowStyles: { fillColor: [248, 250, 252] }
       });
 
-      doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`${filename}_${todayIST()}.pdf`);
       toast.success('PDF report generated and downloaded!');
       setIsOpen(false);
     } catch (err) {

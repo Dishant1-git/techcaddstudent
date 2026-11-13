@@ -23,6 +23,7 @@ import { AttendanceGauge } from '../../components/common/AttendanceGauge';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { EnrollmentBadge } from '../../components/common/EnrollmentBadge';
+import { formatDate, todayIST } from '../../utils/time';
 
 export function StudentDashboard() {
   const { user, profile, refreshProfile } = useAuth();
@@ -151,6 +152,10 @@ export function StudentDashboard() {
 
             <div className="mt-5 space-y-3 pt-4 border-t border-slate-100 text-xs">
               <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-medium">Joined For</span>
+                <span className="font-bold text-indigo-700 text-right">{student?.program_label || 'Not set'}</span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Program / Course</span>
                 <span className="font-semibold text-slate-800 text-right">{student?.course_name || 'Not Enrolled'}</span>
               </div>
@@ -181,7 +186,7 @@ export function StudentDashboard() {
                 Today's Attendance Status
               </h2>
               <span className="text-xs font-mono text-slate-400">
-                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {formatDate(new Date(), { weekday: 'short', year: undefined })}
               </span>
             </div>
 
@@ -358,7 +363,7 @@ export function StudentDashboard() {
         isOpen={showMarkModal}
         onClose={() => setShowMarkModal(false)}
         title="Mark Today's Attendance"
-        subtitle={`Student: ${user?.name} (${student?.student_id || 'STU-ID'}) | Date: ${new Date().toISOString().split('T')[0]}`}
+        subtitle={`Student: ${user?.name} (${student?.student_id || 'STU-ID'}) | Date: ${todayIST()}`}
       >
         <form onSubmit={handleMarkAttendance} className="space-y-4">
           <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">

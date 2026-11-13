@@ -1,12 +1,19 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { db, toTime24, toDateStr, ENROLLMENT_STATUSES } from '../db/database.js';
+import { db, toTime24, toDateStr, ENROLLMENT_STATUSES, PROGRAM_TYPES, PROGRAM_DURATIONS } from '../db/database.js';
 import { checkStudentAbsence } from '../absence.js';
 import { requireAuth, requireAdmin, requireStudent, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { resetFailedLogins, validatePasswordPolicy } from '../middleware/security.js';
 
 const router = express.Router();
+
+// Course or training, and its length (45 days / 6 months / 120 hours)
+export function validateProgram({ program_type, program_duration } = {}) {
+  if (!PROGRAM_TYPES[program_type]) return { error: 'Please choose whether this is a Course or a Training.' };
+  if (!PROGRAM_DURATIONS[program_duration]) return { error: 'Please choose the duration: 45 Days, 6 Months, or 120 Hours.' };
+  return { program_type, program_duration };
+}
 
 // Shared validation for a student's trainer + class timing choice
 export function validateClassChoice({ trainer_id, class_start_time, class_end_time } = {}) {
@@ -157,11 +164,18 @@ router.get('/password-requests', requireAuth, requireAdmin, (req, res) => {
 
 const ENROLLMENT_LABELS = { running: 'Running', hold: 'On Hold', completed: 'Completed', dropped: 'Dropped' };
 
-// PUT /api/students/:id/enrollment - Admin sets course status: running / hold / completed / dropped
-router.put('/:id/enrollment', requireAuth, requireAdmin, (req, res) => {
+// PUT /api/students/:id/enrollment - Admin, or the student's own trainer, sets course status:
+// running / hold / completed / dropped
+router.put('/:id/enrollment', requireAuth, requireTrainerOrAdmin, (req, res) => {
   try {
     const student = db.findById('students', req.params.id);
     if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+    const byTrainer = req.user.role === 'trainer';
+    if (byTrainer && String(student.trainer_id) !== String(req.trainerProfile?.id)) {
+      return res.status(403).json({ success: false, message: 'You can only change the status of your own students.' });
+    }
+    const changedBy = byTrainer ? `your trainer ${req.user.name}` : 'the admin';
 
     const next = req.body?.enrollment_status;
     if (!ENROLLMENT_STATUSES.includes(next)) {
@@ -177,7 +191,7 @@ router.put('/:id/enrollment', requireAuth, requireAdmin, (req, res) => {
       enrollment_status: next,
       status_history: [
         ...(student.status_history || []),
-        { from: previous, to: next, note, by: req.user.id, at: new Date().toISOString() }
+        { from: previous, to: next, note, by: req.user.id, by_role: req.user.role, by_name: req.user.name, at: new Date().toISOString() }
       ]
     };
     if (next === 'completed') updates.completed_on = toDateStr();
@@ -191,24 +205,39 @@ router.put('/:id/enrollment', requireAuth, requireAdmin, (req, res) => {
     db.insert('notifications', {
       user_id: student.user_id,
       title: `Course Status: ${label}`,
-      message: `The admin changed your course status to "${label}".${note ? ` Note: ${note}` : ''}`,
+      message: `${changedBy[0].toUpperCase()}${changedBy.slice(1)} changed your course status to "${label}".${note ? ` Note: ${note}` : ''}`,
       type: 'enrollment_status',
       link: '/student/profile',
       is_read: false
     });
-    const trainer = student.trainer_id ? db.findById('trainers', student.trainer_id) : null;
-    if (trainer) {
-      db.insert('notifications', {
-        user_id: trainer.user_id,
-        title: 'Student Course Status Changed',
-        message: `${user ? user.name : 'A student'} is now "${label}".${note ? ` Note: ${note}` : ''}`,
-        type: 'enrollment_status',
-        link: '/trainer/students',
-        is_read: false
+    const studentName = user ? user.name : 'A student';
+    if (byTrainer) {
+      // Trainer made the change: keep the admins informed
+      db.find('users', u => u.role === 'admin').forEach(admin => {
+        db.insert('notifications', {
+          user_id: admin.id,
+          title: 'Trainer Changed Course Status',
+          message: `${req.user.name} changed ${studentName}'s course status from "${ENROLLMENT_LABELS[previous]}" to "${label}".${note ? ` Note: ${note}` : ''}`,
+          type: 'enrollment_status',
+          link: '/admin/students',
+          is_read: false
+        });
       });
+    } else {
+      const trainer = student.trainer_id ? db.findById('trainers', student.trainer_id) : null;
+      if (trainer) {
+        db.insert('notifications', {
+          user_id: trainer.user_id,
+          title: 'Student Course Status Changed',
+          message: `${studentName} is now "${label}".${note ? ` Note: ${note}` : ''}`,
+          type: 'enrollment_status',
+          link: '/trainer/students',
+          is_read: false
+        });
+      }
     }
 
-    logAudit(req, 'STUDENT_ENROLLMENT_STATUS', `Student ${student.student_id}: ${previous} -> ${next}${note ? ` (${note})` : ''}`);
+    logAudit(req, 'STUDENT_ENROLLMENT_STATUS', `Student ${student.student_id}: ${previous} -> ${next} by ${req.user.role} ${req.user.name}${note ? ` (${note})` : ''}`);
     return res.json({ success: true, message: `${user ? user.name : 'Student'} is now ${label}.`, data: db.getEnrichedStudent(updated) });
   } catch (err) {
     console.error('Update enrollment status error:', err);
@@ -308,10 +337,15 @@ router.get('/:id', requireAuth, (req, res) => {
 // POST /api/students - Admin add new student
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, phone, address, emergency_contact, avatar } = req.body;
+    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, program_type, program_duration, phone, address, emergency_contact, avatar } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Name, email, and initial password are required.' });
+    }
+
+    const program = validateProgram({ program_type, program_duration });
+    if (program.error) {
+      return res.status(400).json({ success: false, message: program.error });
     }
 
     const cleanEmail = db.normalizeEmail(email);
@@ -321,7 +355,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     }
 
     // Auto-generate student code if not provided
-    const nextCode = student_id || `STU-${new Date().getFullYear()}-${String(db.find('students').length + 1).padStart(3, '0')}`;
+    const nextCode = student_id || `STU-${toDateStr().slice(0, 4)}-${String(db.find('students').length + 1).padStart(3, '0')}`;
 
     const password_hash = await bcrypt.hash(password, 10);
     const user = db.insert('users', {
@@ -343,6 +377,8 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       class_start_time: toTime24(class_start_time),
       class_end_time: toTime24(class_end_time),
       enrollment_status: 'running',
+      program_type: program.program_type,
+      program_duration: program.program_duration,
       phone: phone ? phone.trim() : '',
       address: address ? address.trim() : '',
       emergency_contact: emergency_contact ? emergency_contact.trim() : ''
@@ -369,7 +405,15 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
 
-    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, phone, address, emergency_contact, status, avatar } = req.body;
+    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, program_type, program_duration, phone, address, emergency_contact, status, avatar } = req.body;
+
+    if (program_type !== undefined || program_duration !== undefined) {
+      const program = validateProgram({
+        program_type: program_type ?? student.program_type,
+        program_duration: program_duration ?? student.program_duration
+      });
+      if (program.error) return res.status(400).json({ success: false, message: program.error });
+    }
 
     // Update User record
     const userUpdates = {};
@@ -399,6 +443,8 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (trainer_id !== undefined) studentUpdates.trainer_id = trainer_id ? Number(trainer_id) : null;
     if (class_start_time !== undefined) studentUpdates.class_start_time = toTime24(class_start_time);
     if (class_end_time !== undefined) studentUpdates.class_end_time = toTime24(class_end_time);
+    if (program_type !== undefined) studentUpdates.program_type = program_type;
+    if (program_duration !== undefined) studentUpdates.program_duration = program_duration;
     if (phone !== undefined) studentUpdates.phone = phone.trim();
     if (address !== undefined) studentUpdates.address = address.trim();
     if (emergency_contact !== undefined) studentUpdates.emergency_contact = emergency_contact.trim();

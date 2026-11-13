@@ -102,6 +102,9 @@ async function runE2ETests() {
     const noTrainerReg = await req('/auth/register', 'POST', { name: 'No Trainer', email: `no.trainer.${Date.now()}@portal.edu`, password: 'password123' });
     assert(noTrainerReg.status === 400, 'Registration requires choosing a trainer and class timing');
 
+    const noProgramReg = await req('/auth/register', 'POST', { name: 'No Program', email: `no.program.${Date.now()}@portal.edu`, password: 'password123', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(noProgramReg.status === 400, 'Registration requires choosing Course/Training and duration');
+
     const classUpdate = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' }, studentToken);
     assert(classUpdate.ok && classUpdate.data.data.class_timing === '10:00 AM - 12:00 PM', 'Student updates own trainer and class timing');
     const badTiming = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '12:00', class_end_time: '10:00' }, studentToken);
@@ -115,6 +118,8 @@ async function runE2ETests() {
     const testEmail = `new.applicant.${Date.now()}@portal.edu`;
     const regRes = await req('/auth/register', 'POST', {
       name: 'Applicant Alice',
+      program_type: 'training',
+      program_duration: '45_days',
       trainer_id: pickTrainerId,
       class_start_time: '14:00',
       class_end_time: '16:00',
@@ -148,6 +153,8 @@ async function runE2ETests() {
     const rejectEmail = `rejected.applicant.${Date.now()}@portal.edu`;
     const regRes2 = await req('/auth/register', 'POST', {
       name: 'Applicant Bob',
+      program_type: 'training',
+      program_duration: '45_days',
       trainer_id: pickTrainerId,
       class_start_time: '14:00',
       class_end_time: '16:00',
@@ -300,12 +307,54 @@ async function runE2ETests() {
     assert(badStatus.status === 400, 'Unknown course status is rejected');
     await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'running' }, adminToken);
 
+    // Trainer changes course status of their own student, not others
+    const trainerHold = await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'hold', note: 'Medical' }, trainerToken);
+    assert(trainerHold.ok && trainerHold.data.data.enrollment_status === 'hold', 'Trainer changes course status of own student');
+    await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'running' }, trainerToken);
+    const otherStudent = (await req('/students', 'GET', null, adminToken)).data.data.find(s => s.trainer_id && String(s.trainer_id) !== String(alexId));
+    if (otherStudent) {
+      const forbidden = await req(`/students/${otherStudent.id}/enrollment`, 'PUT', { enrollment_status: 'hold' }, trainerToken);
+      assert(forbidden.status === 403, 'Trainer cannot change status of another trainer\'s student');
+    }
+    const adminNotifs = (await req('/notifications', 'GET', null, adminToken)).data.data;
+    assert(adminNotifs.some(n => n.title === 'Trainer Changed Course Status'), 'Admin is notified when a trainer changes course status');
+    const studentStatusChange = await req(`/students/${johnProfile.id}/enrollment`, 'PUT', { enrollment_status: 'hold' }, studentToken);
+    assert(studentStatusChange.status === 403, 'Students cannot change course status');
+
+    // Dates and check-in times are IST
+    const istToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const istMark = await req('/attendance/mark', 'POST', { session: `IST Check ${Date.now()}` }, studentToken);
+    const istNow = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date());
+    assert(istMark.ok && istMark.data.data.date === istToday && istMark.data.data.check_in_time.slice(-2) === istNow.slice(-2) && istMark.data.data.check_in_time.slice(0, 2) === istNow.slice(0, 2), 'Attendance date and check-in time use IST');
+
     const adminAlerts = await req('/absence/alerts', 'GET', null, adminToken);
     const trainerAlerts = await req('/absence/alerts', 'GET', null, trainerToken);
     const studentAlerts = await req('/absence/alerts', 'GET', null, studentToken);
     assert(adminAlerts.ok && trainerAlerts.ok && studentAlerts.status === 403, 'Absence alerts visible to admin and trainer only');
     const checkNow = await req('/absence/check', 'POST', null, adminToken);
     assert(checkNow.ok, 'Admin can run the absence check on demand');
+
+    // Program shows to admin and trainer
+    const aliceRow = (await req('/students?status=active', 'GET', null, adminToken)).data.data.find(s => s.email === testEmail);
+    assert(aliceRow?.program_label === 'Training (45 Days)' && aliceRow.expected_end_date, 'Student program and expected end date are stored');
+    const trainerStudents = await req('/students', 'GET', null, trainerToken);
+    assert(trainerStudents.ok && trainerStudents.data.data.every(s => 'program_label' in s), 'Trainer sees each student\'s program');
+
+    // Bulk leave actions notify the trainer
+    await req('/leaves', 'POST', { from_date: day(20), to_date: day(20), reason: 'Bulk A' }, studentToken);
+    await req('/leaves', 'POST', { from_date: day(22), to_date: day(22), reason: 'Bulk B' }, studentToken);
+    const bulkApprove = await req('/leaves/bulk/approve', 'POST', {}, adminToken);
+    assert(bulkApprove.ok && bulkApprove.data.count >= 2, 'Admin approves all pending leaves at once');
+    await req('/leaves', 'POST', { from_date: day(25), to_date: day(25), reason: 'Bulk C' }, studentToken);
+    const bulkReject = await req('/leaves/bulk/reject', 'POST', { admin_note: 'Exams week' }, adminToken);
+    assert(bulkReject.ok && bulkReject.data.count === 1, 'Admin rejects all pending leaves at once');
+    const trainerLeaves = await req('/leaves/trainer', 'GET', null, trainerToken);
+    assert(trainerLeaves.ok && trainerLeaves.data.data.some(l => l.status === 'approved') && trainerLeaves.data.data.some(l => l.status === 'rejected'), 'Trainer sees approved and rejected leaves of their students');
+    const trainerNotifs = (await req('/notifications', 'GET', null, trainerToken)).data.data;
+    assert(trainerNotifs.some(n => n.type === 'leave_approved') && trainerNotifs.some(n => n.type === 'leave_rejected'), 'Trainer is notified of approved and rejected leaves');
+    const approveAll = await req('/absence/alerts/approve-all', 'POST', {}, adminToken);
+    const dismissAll = await req('/absence/alerts/dismiss-all', 'POST', {}, adminToken);
+    assert(approveAll.ok && dismissAll.ok, 'Approve-all and dismiss-all absence actions work');
 
     const report = await req('/analytics/student-report', 'GET', null, adminToken);
     assert(report.ok && report.data.data.summary.totalStudents > 0 && Array.isArray(report.data.data.byCourse) && report.data.data.students[0]?.enrollment_status,

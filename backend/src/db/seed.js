@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { db } from './database.js';
+import { db, toDateStr, addDays } from './database.js';
 import { closeMongo } from './mongo.js';
 
 export async function seedDatabase() {
@@ -194,6 +194,8 @@ export async function seedDatabase() {
   const s1 = db.insert('students', {
     user_id: uStudent1.id,
     student_id: 'STU-2026-001',
+    program_type: 'course',
+    program_duration: '6_months',
     course_id: c1.id,
     class_start_time: '09:00',
     class_end_time: '12:00',
@@ -206,6 +208,8 @@ export async function seedDatabase() {
   const s2 = db.insert('students', {
     user_id: uStudent2.id,
     student_id: 'STU-2026-002',
+    program_type: 'course',
+    program_duration: '6_months',
     course_id: c1.id,
     class_start_time: '09:00',
     class_end_time: '12:00',
@@ -218,6 +222,8 @@ export async function seedDatabase() {
   const s3 = db.insert('students', {
     user_id: uStudent3.id,
     student_id: 'STU-2026-003',
+    program_type: 'training',
+    program_duration: '45_days',
     course_id: c2.id,
     class_start_time: '13:30',
     class_end_time: '16:30',
@@ -230,6 +236,8 @@ export async function seedDatabase() {
   const s4 = db.insert('students', {
     user_id: uStudent4.id,
     student_id: 'STU-2026-004',
+    program_type: 'training',
+    program_duration: '120_hours',
     course_id: c2.id,
     class_start_time: '13:30',
     class_end_time: '16:30',
@@ -242,6 +250,8 @@ export async function seedDatabase() {
   const s5 = db.insert('students', {
     user_id: uStudent5.id,
     student_id: 'STU-2026-005',
+    program_type: 'training',
+    program_duration: '45_days',
     course_id: c3.id,
     class_start_time: '17:30',
     class_end_time: '20:30',
@@ -254,6 +264,8 @@ export async function seedDatabase() {
   const s6 = db.insert('students', {
     user_id: uStudent6.id,
     student_id: 'STU-2026-006',
+    program_type: 'course',
+    program_duration: '6_months',
     course_id: c1.id,
     class_start_time: '09:00',
     class_end_time: '12:00',
@@ -265,7 +277,7 @@ export async function seedDatabase() {
 
   // 6. Attendance Generation (Realistic dates over last 14 days + today)
   const today = new Date();
-  const formatDate = (d) => d.toISOString().split('T')[0];
+  const formatDate = (d) => toDateStr(d);
 
   const sessions = ['Morning Lecture', 'Afternoon Lab'];
   const studentsList = [
@@ -278,11 +290,10 @@ export async function seedDatabase() {
   ];
 
   for (let i = 12; i >= 1; i--) {
-    const d = new Date();
-    d.setDate(today.getDate() - i);
-    // Skip weekends
-    if (d.getDay() === 0 || d.getDay() === 6) continue;
-    const dateStr = formatDate(d);
+    // IST calendar day i days ago; skip weekends
+    const dateStr = addDays(toDateStr(today), -i);
+    const weekday = new Date(`${dateStr}T00:00:00.000Z`).getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
 
     for (const item of studentsList) {
       // 85% verified, 10% rejected, 5% skipped
@@ -296,11 +307,11 @@ export async function seedDatabase() {
           session: 'Morning Lecture',
           check_in_time: '09:04 AM',
           status: 'Verified',
-          verification_time: `${dateStr}T10:15:00.000Z`,
+          verification_time: `${dateStr}T04:45:00.000Z`,
           verified_by: item.trainer.id,
           verified_by_name: item.trainer.id === t1.id ? 'Alex Rivera' : (item.trainer.id === t2.id ? 'Sarah Jenkins' : 'Marcus Chen'),
           rejection_reason: null,
-          created_at: `${dateStr}T09:04:00.000Z`
+          created_at: `${dateStr}T03:34:00.000Z`
         });
       } else if (rand < 0.95) {
         db.insert('attendance', {
@@ -311,11 +322,11 @@ export async function seedDatabase() {
           session: 'Morning Lecture',
           check_in_time: '10:45 AM',
           status: 'Rejected',
-          verification_time: `${dateStr}T11:30:00.000Z`,
+          verification_time: `${dateStr}T06:00:00.000Z`,
           verified_by: item.trainer.id,
           verified_by_name: item.trainer.id === t1.id ? 'Alex Rivera' : (item.trainer.id === t2.id ? 'Sarah Jenkins' : 'Marcus Chen'),
           rejection_reason: 'Checked in more than 90 minutes late without authorized leave note.',
-          created_at: `${dateStr}T10:45:00.000Z`
+          created_at: `${dateStr}T05:15:00.000Z`
         });
       }
     }

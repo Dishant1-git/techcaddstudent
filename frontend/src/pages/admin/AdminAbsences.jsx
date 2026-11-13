@@ -4,8 +4,10 @@ import { AlertTriangle, CalendarOff, CheckCircle2, XCircle, RefreshCw, Phone, Ma
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../../components/common/Modal';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { todayIST, formatDate } from '../../utils/time';
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayIST();
 
 const LEAVE_STYLES = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -41,6 +43,56 @@ export function AdminAbsences() {
   // Reject a leave request with a note
   const [rejecting, setRejecting] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+
+  // Bulk actions: { kind: 'approveAlerts' | 'dismissAlerts' | 'approveLeaves' | 'rejectLeaves' }
+  const [bulk, setBulk] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const BULK = {
+    approveAlerts: {
+      title: 'Approve leave for all?',
+      message: (n) => `This approves leave for all ${n} absent student(s), from their first absent day to today. Alerts stop and each trainer is informed.`,
+      confirmText: 'Approve All',
+      type: 'warning',
+      run: () => api.approveAllAbsenceAlerts()
+    },
+    dismissAlerts: {
+      title: 'Dismiss all alerts?',
+      message: (n) => `This stops alerts for all ${n} absent student(s) without recording a leave. Each trainer is informed.`,
+      confirmText: 'Dismiss All',
+      type: 'danger',
+      run: () => api.dismissAllAbsenceAlerts()
+    },
+    approveLeaves: {
+      title: 'Approve all leave requests?',
+      message: (n) => `This approves all ${n} pending leave request(s). Students and their trainers are informed.`,
+      confirmText: 'Approve All',
+      type: 'warning',
+      run: () => api.approveAllLeaves()
+    },
+    rejectLeaves: {
+      title: 'Reject all leave requests?',
+      message: (n) => `This rejects all ${n} pending leave request(s). Students and their trainers are informed.`,
+      confirmText: 'Reject All',
+      type: 'danger',
+      run: () => api.rejectAllLeaves('')
+    }
+  };
+
+  const runBulk = async () => {
+    if (!bulk) return;
+    setBulkLoading(true);
+    try {
+      const res = await BULK[bulk].run();
+      toast.success(res.message);
+      setBulk(null);
+      await load();
+    } catch (err) {
+      toast.error(err.message || 'Action failed.');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -184,6 +236,25 @@ export function AdminAbsences() {
         {tabButton('history', 'History', 0, '')}
       </div>
 
+      {!loading && tab === 'alerts' && alerts.length > 1 && (
+        <BulkBar
+          text={`${alerts.length} students absent`}
+          onApprove={() => setBulk('approveAlerts')}
+          onSecondary={() => setBulk('dismissAlerts')}
+          approveLabel="Approve All Leaves"
+          secondaryLabel="Dismiss All"
+        />
+      )}
+      {!loading && tab === 'leaves' && pendingLeaves.length > 1 && (
+        <BulkBar
+          text={`${pendingLeaves.length} leave requests waiting`}
+          onApprove={() => setBulk('approveLeaves')}
+          onSecondary={() => setBulk('rejectLeaves')}
+          approveLabel="Approve All"
+          secondaryLabel="Reject All"
+        />
+      )}
+
       {loading ? (
         <div className="py-16 flex justify-center">
           <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -254,12 +325,23 @@ export function AdminAbsences() {
               </div>
               <span className="text-slate-600">
                 {RESOLVED_LABELS[a.resolved_reason] || 'Resolved'}
-                {a.resolved_at && <span className="text-slate-400"> • {new Date(a.resolved_at).toLocaleDateString()}</span>}
+                {a.resolved_at && <span className="text-slate-400"> • {formatDate(a.resolved_at)}</span>}
               </span>
             </div>
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!bulk}
+        onClose={() => setBulk(null)}
+        onConfirm={runBulk}
+        loading={bulkLoading}
+        title={bulk ? BULK[bulk].title : ''}
+        message={bulk ? BULK[bulk].message(bulk.endsWith('Alerts') ? alerts.length : pendingLeaves.length) : ''}
+        confirmText={bulk ? BULK[bulk].confirmText : 'Confirm'}
+        type={bulk ? BULK[bulk].type : 'warning'}
+      />
 
       <Modal
         isOpen={!!granting}
@@ -308,6 +390,22 @@ export function AdminAbsences() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+function BulkBar({ text, onApprove, onSecondary, approveLabel, secondaryLabel }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+      <span className="text-xs font-semibold text-slate-700">{text}</span>
+      <div className="flex gap-2">
+        <button onClick={onApprove} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer">
+          <CheckCircle2 className="w-4 h-4" /> {approveLabel}
+        </button>
+        <button onClick={onSecondary} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs cursor-pointer">
+          <XCircle className="w-4 h-4" /> {secondaryLabel}
+        </button>
+      </div>
     </div>
   );
 }

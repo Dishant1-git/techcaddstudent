@@ -149,6 +149,11 @@ export const api = {
   rejectLeave: (id, admin_note) => request(`/leaves/${id}/reject`, { method: 'POST', body: JSON.stringify({ admin_note }) }),
   getAbsenceAlerts: (status = 'open') => request(`/absence/alerts?status=${status}`),
   runAbsenceCheck: () => request('/absence/check', { method: 'POST' }),
+  approveAllAbsenceAlerts: (reason) => request('/absence/alerts/approve-all', { method: 'POST', body: JSON.stringify({ reason }) }),
+  dismissAllAbsenceAlerts: () => request('/absence/alerts/dismiss-all', { method: 'POST' }),
+  approveAllLeaves: () => request('/leaves/bulk/approve', { method: 'POST', body: JSON.stringify({}) }),
+  rejectAllLeaves: (admin_note) => request('/leaves/bulk/reject', { method: 'POST', body: JSON.stringify({ admin_note }) }),
+  getTrainerLeaves: () => request('/leaves/trainer'),
   dismissAbsenceAlert: (id) => request(`/absence/alerts/${id}/dismiss`, { method: 'POST' }),
   getStudentReport: (params = {}) => {
     const query = new URLSearchParams(params).toString();

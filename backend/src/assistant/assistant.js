@@ -1,4 +1,4 @@
-import { db } from '../db/database.js';
+import { db, toDateStr } from '../db/database.js';
 import * as knowledge from './knowledge.js';
 import { getTechNews } from './news.js';
 import { chat } from './groq.js';
@@ -156,7 +156,7 @@ export async function answerQuestion({ message, history }) {
     ? items.map((item, index) => `[${index + 1}] ${item.label}\n${item.body}`).join('\n\n')
     : 'No reference material was found for this question.';
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toDateStr();
   const result = await chat([
     { role: 'system', content: SYSTEM_PROMPT },
     ...turns,

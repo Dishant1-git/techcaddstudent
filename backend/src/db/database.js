@@ -26,20 +26,50 @@ const defaultSchema = {
 
 export const ENROLLMENT_STATUSES = ['running', 'hold', 'completed', 'dropped'];
 
+// What the student signed up for, and how long it runs
+export const PROGRAM_TYPES = { course: 'Course', training: 'Training' };
+export const PROGRAM_DURATIONS = { '45_days': '45 Days', '6_months': '6 Months', '120_hours': '120 Hours' };
+
+export function programLabel(type, duration) {
+  if (!PROGRAM_TYPES[type]) return 'Not set';
+  return PROGRAM_DURATIONS[duration] ? `${PROGRAM_TYPES[type]} (${PROGRAM_DURATIONS[duration]})` : PROGRAM_TYPES[type];
+}
+
+// Length of one class in hours, from the student's own timing
+export function classHours(start, end) {
+  const s = toTime24(start), e = toTime24(end);
+  if (!s || !e) return 0;
+  const [sh, sm] = s.split(':').map(Number);
+  const [eh, em] = e.split(':').map(Number);
+  return Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+}
+
 // Days classes run on (0 = Sunday). Override with WORKING_DAYS="1,2,3,4,5".
 export const WORKING_DAYS = new Set(
   (process.env.WORKING_DAYS || '1,2,3,4,5,6').split(',').map(Number).filter(n => n >= 0 && n <= 6)
 );
 
-// Dates are plain YYYY-MM-DD strings (UTC), matching how attendance dates are stored
+// The institute runs on India Standard Time. Calendar dates are plain YYYY-MM-DD strings in IST;
+// stored timestamps (created_at etc.) stay ISO/UTC and are converted only when shown.
+export const TIME_ZONE = 'Asia/Kolkata';
+
+// IST calendar date of a moment, e.g. 2026-11-13T20:00Z -> "2026-11-14"
 export function toDateStr(date = new Date()) {
-  return date.toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(date));
 }
 
+// IST clock time, e.g. "09:05 AM"
+export function toTimeStr(date = new Date()) {
+  return new Intl.DateTimeFormat('en-US', { timeZone: TIME_ZONE, hour: '2-digit', minute: '2-digit', hour12: true })
+    .format(new Date(date));
+}
+
+// Pure calendar arithmetic on YYYY-MM-DD strings (no time zone involved)
 export function addDays(dateStr, delta) {
   const d = new Date(`${dateStr}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + delta);
-  return toDateStr(d);
+  return d.toISOString().slice(0, 10);
 }
 
 export function isWorkingDay(dateStr) {
@@ -348,7 +378,7 @@ class Database {
 
   // The day a student started: account creation, or their first attendance if that is earlier
   getStudentJoinDate(student) {
-    const created = (student.created_at || '').slice(0, 10) || toDateStr();
+    const created = student.created_at ? toDateStr(student.created_at) : toDateStr();
     const first = this.find('attendance', a => String(a.student_id) === String(student.id))
       .reduce((min, a) => (a.date && a.date < min ? a.date : min), created);
     return first;
@@ -426,6 +456,31 @@ class Database {
     const todayStr = toDateStr();
     const enrollmentStatus = ENROLLMENT_STATUSES.includes(student.enrollment_status) ? student.enrollment_status : 'running';
     const streak = enrollmentStatus === 'running' ? this.getAbsenceStreak(student, todayStr) : { days: 0 };
+    const joinedOn = this.getStudentJoinDate(student);
+
+    // Program progress: calendar-based for 45 days / 6 months, hour-based for 120 hours
+    const hoursPerClass = classHours(student.class_start_time, student.class_end_time);
+    let expectedEndDate = null;
+    let hoursCompleted = null;
+    if (student.program_duration === '45_days') {
+      expectedEndDate = addDays(joinedOn, 44);
+    } else if (student.program_duration === '6_months') {
+      const d = new Date(`${joinedOn}T00:00:00.000Z`);
+      d.setUTCMonth(d.getUTCMonth() + 6);
+      expectedEndDate = addDays(d.toISOString().slice(0, 10), -1);
+    } else if (student.program_duration === '120_hours') {
+      hoursCompleted = Math.round(verifiedAttendance * hoursPerClass * 10) / 10;
+      if (hoursPerClass > 0) {
+        // Remaining hours spread over the student's working days, starting tomorrow
+        let remainingClasses = Math.ceil(Math.max(0, 120 - hoursCompleted) / hoursPerClass);
+        let day = todayStr;
+        while (remainingClasses > 0) {
+          day = addDays(day, 1);
+          if (isWorkingDay(day)) remainingClasses -= 1;
+        }
+        expectedEndDate = day;
+      }
+    }
 
     return {
       ...student,
@@ -440,7 +495,13 @@ class Database {
       trainer_name: trainerUser ? trainerUser.name : 'Not Selected',
       trainer_specialization: trainer ? trainer.specialization : '',
       enrollment_status: enrollmentStatus,
-      joined_on: this.getStudentJoinDate(student),
+      joined_on: joinedOn,
+      program_type: PROGRAM_TYPES[student.program_type] ? student.program_type : null,
+      program_duration: PROGRAM_DURATIONS[student.program_duration] ? student.program_duration : null,
+      program_label: programLabel(student.program_type, student.program_duration),
+      expected_end_date: expectedEndDate,
+      hours_per_class: Math.round(hoursPerClass * 100) / 100,
+      hours_completed: hoursCompleted,
       last_attendance_date: lastAttendance || null,
       absent_streak: streak.days,
       on_leave_today: !!this.getApprovedLeaveOn(student.id, todayStr),

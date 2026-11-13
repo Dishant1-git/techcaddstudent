@@ -1,9 +1,9 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { db } from '../db/database.js';
+import { db, programLabel, toDateStr } from '../db/database.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
-import { validateClassChoice } from './students.js';
+import { validateClassChoice, validateProgram } from './students.js';
 import {
   authLoginLimiter,
   checkAccountLockout,
@@ -16,7 +16,7 @@ const router = express.Router();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function createStudentCode() {
-  const year = new Date().getFullYear();
+  const year = toDateStr().slice(0, 4);
   const prefix = `STU-${year}-`;
   const existingCodes = new Set(db.find('students').map(student => student.student_id));
   let sequence = 1;
@@ -45,7 +45,7 @@ function toSafeUser(user) {
 // POST /api/auth/register - Public student self-registration
 router.post('/register', authLoginLimiter, async (req, res) => {
   try {
-    const { name, email, password, phone, domain, trainer_id, class_start_time, class_end_time } = req.body;
+    const { name, email, password, phone, domain, trainer_id, class_start_time, class_end_time, program_type, program_duration } = req.body;
     const cleanName = typeof name === 'string' ? name.trim() : '';
     const cleanEmail = db.normalizeEmail(email);
     const cleanDomain = typeof domain === 'string' ? domain.trim() : '';
@@ -68,6 +68,11 @@ router.post('/register', authLoginLimiter, async (req, res) => {
         success: false,
         message: 'An account with this email address already exists. Please sign in instead.'
       });
+    }
+
+    const program = validateProgram({ program_type, program_duration });
+    if (program.error) {
+      return res.status(400).json({ success: false, message: program.error });
     }
 
     const classChoice = validateClassChoice({ trainer_id, class_start_time, class_end_time });
@@ -95,6 +100,8 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       class_start_time: classChoice.start,
       class_end_time: classChoice.end,
       enrollment_status: 'running',
+      program_type: program.program_type,
+      program_duration: program.program_duration,
       phone: user.phone,
       address: '',
       emergency_contact: ''
@@ -115,7 +122,7 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       db.insert('notifications', {
         user_id: admin.id,
         title: 'New Student Registration Pending',
-        message: `Student ${cleanName} (${cleanEmail})${cleanDomain ? ` [Domain: ${cleanDomain}]` : ''} has registered and requires verification.`,
+        message: `Student ${cleanName} (${cleanEmail})${cleanDomain ? ` [Domain: ${cleanDomain}]` : ''} has registered for ${programLabel(program.program_type, program.program_duration)} and requires verification.`,
         type: 'student_registration',
         link: '/admin/students?status=pending_approval',
         is_read: false

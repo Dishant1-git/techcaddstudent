@@ -218,6 +218,22 @@ export function StudentProfile() {
               </div>
             )}
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <span className="font-semibold text-slate-600">Joined For:</span>
+              <span className="font-bold text-indigo-700">{profile?.program_label || 'Not set'}</span>
+            </div>
+
+            {profile?.expected_end_date && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                <span className="font-semibold text-slate-600">{profile.program_duration === '120_hours' ? 'Hours Completed:' : 'Expected End:'}</span>
+                <span className="font-bold text-slate-900">
+                  {profile.program_duration === '120_hours'
+                    ? `${profile.hours_completed ?? 0} / 120 hrs (est. ${profile.expected_end_date})`
+                    : profile.expected_end_date}
+                </span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
               <span className="font-semibold text-slate-600">Course Program:</span>
               <span className="font-bold text-slate-900">{profile?.course_name || 'Not Enrolled'}</span>
             </div>

@@ -9,6 +9,7 @@ import {
   Check
 } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
+import { formatDateTime } from '../../utils/time';
 
 export function NotificationsPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
@@ -85,7 +86,7 @@ export function NotificationsPage() {
 
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <span className="text-[11px] text-slate-400 font-mono">
-                    {new Date(notif.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                    {formatDateTime(notif.created_at)}
                   </span>
                   {!notif.is_read && (
                     <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[9px] uppercase">

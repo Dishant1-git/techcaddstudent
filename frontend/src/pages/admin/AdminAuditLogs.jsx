@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext';
 import { api } from '../../services/api';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { formatDateTime } from '../../utils/time';
 
 export function AdminAuditLogs() {
   const toast = useToast();
@@ -44,7 +45,7 @@ export function AdminAuditLogs() {
       sortable: true,
       render: (l) => (
         <span className="font-mono text-xs text-slate-500">
-          {new Date(l.created_at).toLocaleString()}
+          {formatDateTime(l.created_at)}
         </span>
       )
     },

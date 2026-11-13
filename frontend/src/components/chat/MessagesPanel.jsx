@@ -5,15 +5,14 @@ import { useToast } from '../../context/ToastContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { api } from '../../services/api';
 import { socket } from '../../services/socket';
+import { isTodayIST, formatDateTime, formatTime as formatClock } from '../../utils/time';
 
 // Messages arrive over the WebSocket; polling only runs while it is down
 const FALLBACK_POLL_INTERVAL_MS = 15000;
 const MAX_MESSAGE_LENGTH = 2000;
 
 function formatTime(iso) {
-  const date = new Date(iso);
-  const isToday = date.toDateString() === new Date().toDateString();
-  return date.toLocaleString([], isToday ? { timeStyle: 'short' } : { dateStyle: 'medium', timeStyle: 'short' });
+  return isTodayIST(iso) ? formatClock(iso) : formatDateTime(iso);
 }
 
 function avatarFor(person) {

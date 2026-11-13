@@ -18,6 +18,7 @@ import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { ExportReports } from '../../components/common/ExportReports';
+import { formatDateTime } from '../../utils/time';
 
 export function AdminAttendance() {
   const toast = useToast();
@@ -310,7 +311,7 @@ export function AdminAttendance() {
                 <p className="font-bold text-emerald-950 text-sm mt-0.5">Verified by {selectedRecord.verified_by_name}</p>
                 {selectedRecord.verification_time && (
                   <span className="text-[11px] text-emerald-700 font-mono block mt-1">
-                    Timestamp: {new Date(selectedRecord.verification_time).toLocaleString()}
+                    Timestamp: {formatDateTime(selectedRecord.verification_time)}
                   </span>
                 )}
               </div>

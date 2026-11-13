@@ -26,6 +26,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { ENROLLMENT_OPTIONS, AbsenceTag } from '../../components/common/EnrollmentBadge';
+import { ProgramFields, validateProgram } from '../../components/common/ProgramFields';
+import { todayIST, formatDateTime } from '../../utils/time';
 
 export function AdminStudents() {
   const toast = useToast();
@@ -66,6 +68,8 @@ export function AdminStudents() {
     trainer_id: '',
     class_start_time: '',
     class_end_time: '',
+    program_type: '',
+    program_duration: '',
     phone: '',
     address: '',
     emergency_contact: '',
@@ -148,12 +152,14 @@ export function AdminStudents() {
       name: '',
       email: '',
       password: 'student123',
-      student_id: `STU-${new Date().getFullYear()}-${String(students.length + 1).padStart(3, '0')}`,
+      student_id: `STU-${todayIST().slice(0, 4)}-${String(students.length + 1).padStart(3, '0')}`,
       domain: '',
       course_id: courses[0]?.id || '',
       trainer_id: '',
       class_start_time: '',
       class_end_time: '',
+      program_type: '',
+      program_duration: '',
       phone: '',
       address: '',
       emergency_contact: '',
@@ -175,6 +181,8 @@ export function AdminStudents() {
       trainer_id: student.trainer_id || '',
       class_start_time: student.class_start_time || '',
       class_end_time: student.class_end_time || '',
+      program_type: student.program_type || '',
+      program_duration: student.program_duration || '',
       phone: student.phone || '',
       address: student.address || '',
       emergency_contact: student.emergency_contact || '',
@@ -186,6 +194,11 @@ export function AdminStudents() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const programError = validateProgram(formData);
+    if (programError) {
+      toast.warning(programError);
+      return;
+    }
     setSubmitting(true);
     try {
       if (editingStudent) {
@@ -327,12 +340,13 @@ export function AdminStudents() {
       )
     },
     {
-      header: 'Course & Class Time',
-      key: 'class_timing',
+      header: 'Program & Class Time',
+      key: 'program_label',
       sortable: true,
       render: (s) => (
         <div>
-          <span className="font-semibold text-xs text-slate-800">{s.class_timing || 'Timing not set'}</span>
+          <span className={`font-bold text-xs ${s.program_type ? 'text-indigo-700' : 'text-slate-400'}`}>{s.program_label}</span>
+          <div className="text-[10px] text-slate-500">{s.class_timing || 'Timing not set'}</div>
           <div className="text-[10px] text-slate-400">{s.course_name}</div>
           {s.domain && (
             <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -585,7 +599,7 @@ export function AdminStudents() {
                 <div className="font-bold text-slate-900">{r.student_name} <span className="font-mono text-xs text-indigo-700">({r.student_code})</span></div>
                 <div className="text-xs text-slate-500 font-mono">{r.student_email}</div>
                 {r.note && <div className="mt-1 text-xs text-slate-700">"{r.note}"</div>}
-                <div className="mt-1 text-[11px] text-slate-400">Requested {new Date(r.created_at).toLocaleString()}</div>
+                <div className="mt-1 text-[11px] text-slate-400">Requested {formatDateTime(r.created_at)}</div>
               </div>
               <button
                 onClick={() => openResetModal({ id: r.student_id, name: r.student_name, email: r.student_email })}
@@ -602,12 +616,17 @@ export function AdminStudents() {
         columns={columns}
         data={filteredStudents}
         searchPlaceholder="Search student name, ID, email, or trainer..."
-        searchFields={['name', 'student_id', 'email', 'domain', 'trainer_name', 'course_name', 'phone']}
+        searchFields={['name', 'student_id', 'email', 'domain', 'trainer_name', 'course_name', 'phone', 'program_label']}
         filters={[
           {
             key: 'enrollment_status',
             label: 'Course Status',
             options: ENROLLMENT_OPTIONS
+          },
+          {
+            key: 'program_type',
+            label: 'Program',
+            options: [{ value: 'course', label: 'Course' }, { value: 'training', label: 'Training' }]
           },
           {
             key: 'status',
@@ -778,6 +797,13 @@ export function AdminStudents() {
                 />
               </div>
             )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <ProgramFields
+              value={{ program_type: formData.program_type, program_duration: formData.program_duration }}
+              onChange={(v) => setFormData({ ...formData, ...v })}
+            />
           </div>
 
           {/* Academic Assignments */}

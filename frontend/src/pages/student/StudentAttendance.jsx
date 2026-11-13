@@ -22,6 +22,7 @@ import { Modal } from '../../components/common/Modal';
 import { ExportReports } from '../../components/common/ExportReports';
 import { StudentLeaves } from '../../components/student/StudentLeaves';
 import { enrollmentLabel } from '../../components/common/EnrollmentBadge';
+import { formatDateTime, todayIST } from '../../utils/time';
 
 export function StudentAttendance() {
   const { user, profile } = useAuth();
@@ -249,7 +250,7 @@ export function StudentAttendance() {
         isOpen={showMarkModal}
         onClose={() => setShowMarkModal(false)}
         title="Mark Class Attendance"
-        subtitle={`Date: ${new Date().toISOString().split('T')[0]}${profile?.class_timing ? ` | Class time: ${profile.class_timing}` : ''}`}
+        subtitle={`Date: ${todayIST()}${profile?.class_timing ? ` | Class time: ${profile.class_timing}` : ''}`}
       >
         {!profile?.trainer_id ? (
           <div className="space-y-4 text-sm">
@@ -364,7 +365,7 @@ export function StudentAttendance() {
                 <p className="font-bold text-emerald-950 text-sm mt-0.5">{selectedRecord.verified_by_name}</p>
                 {selectedRecord.verification_time && (
                   <span className="text-[11px] text-emerald-700 font-mono">
-                    Timestamp: {new Date(selectedRecord.verification_time).toLocaleString()}
+                    Timestamp: {formatDateTime(selectedRecord.verification_time)}
                   </span>
                 )}
               </div>

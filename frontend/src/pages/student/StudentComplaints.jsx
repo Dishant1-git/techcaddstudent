@@ -18,6 +18,7 @@ import { api } from '../../services/api';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
+import { formatDate, formatDateTime } from '../../utils/time';
 
 export function StudentComplaints() {
   const { user } = useAuth();
@@ -145,7 +146,7 @@ export function StudentComplaints() {
       sortable: true,
       render: (c) => (
         <span className="text-xs text-slate-500">
-          {new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {formatDate(c.created_at)}
         </span>
       )
     },
@@ -374,7 +375,7 @@ export function StudentComplaints() {
           isOpen={!!selectedComplaint}
           onClose={() => setSelectedComplaint(null)}
           title={`Complaint #${selectedComplaint.id}`}
-          subtitle={`Submitted on ${new Date(selectedComplaint.created_at).toLocaleString()}`}
+          subtitle={`Submitted on ${formatDateTime(selectedComplaint.created_at)}`}
         >
           <div className="space-y-4 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-2xl bg-slate-50 border border-slate-100">

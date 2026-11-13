@@ -3,6 +3,7 @@ import { CalendarOff, Plus } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../common/Modal';
+import { todayIST } from '../../utils/time';
 
 const STYLES = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -10,7 +11,7 @@ const STYLES = {
   rejected: 'bg-rose-50 text-rose-700 border-rose-200'
 };
 const LABELS = { pending: 'Waiting for admin', approved: 'Approved', rejected: 'Not approved' };
-const today = () => new Date().toISOString().split('T')[0];
+const today = () => todayIST();
 const inputClass = 'mt-1.5 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm normal-case tracking-normal font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500';
 
 // Student's leave requests: ask for leave and see what the admin decided

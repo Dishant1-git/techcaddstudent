@@ -1,6 +1,6 @@
 import express from 'express';
 import { db, countWorkingDays } from '../db/database.js';
-import { requireAuth, requireAdmin, requireStudent } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, requireStudent, requireTrainer } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { checkStudentAbsence, resolveAlert } from '../absence.js';
 
@@ -28,6 +28,29 @@ function validateRange(from_date, to_date) {
   return '';
 }
 
+export function notifyStudentTrainer(student, title, message, type) {
+  const trainer = student && student.trainer_id ? db.findById('trainers', student.trainer_id) : null;
+  if (!trainer) return;
+  db.insert('notifications', { user_id: trainer.user_id, title, message, type, link: '/trainer/students', is_read: false });
+}
+
+// Admin approves leave for a student directly (used by "Approve Leave" and "Approve All" on alerts)
+export function grantLeave(req, student, from_date, to_date, reason) {
+  const leave = db.insert('leaves', {
+    student_id: student.id,
+    from_date,
+    to_date,
+    reason: reason || 'Approved by admin',
+    status: 'approved',
+    requested_by: 'admin',
+    admin_note: '',
+    reviewed_by: req.user.id,
+    reviewed_at: new Date().toISOString()
+  });
+  afterApproval(req, leave, student);
+  return leave;
+}
+
 // Tells the student and their trainer, and re-checks absence so alerts stop right away
 function afterApproval(req, leave, student) {
   const user = db.findById('users', student.user_id);
@@ -39,17 +62,12 @@ function afterApproval(req, leave, student) {
     link: '/student/attendance',
     is_read: false
   });
-  const trainer = student.trainer_id ? db.findById('trainers', student.trainer_id) : null;
-  if (trainer) {
-    db.insert('notifications', {
-      user_id: trainer.user_id,
-      title: 'Student On Approved Leave',
-      message: `${user ? user.name : 'Your student'} is on approved leave from ${leave.from_date} to ${leave.to_date}${leave.reason ? ` (${leave.reason})` : ''}.`,
-      type: 'leave_approved',
-      link: '/trainer/students',
-      is_read: false
-    });
-  }
+  notifyStudentTrainer(
+    student,
+    'Student On Approved Leave',
+    `${user ? user.name : 'Your student'} is on approved leave from ${leave.from_date} to ${leave.to_date}${leave.reason ? ` (${leave.reason})` : ''}.`,
+    'leave_approved'
+  );
   // The leave covers the absent days, so close any open alert for this student
   db.find('absence_alerts', a => String(a.student_id) === String(student.id) && a.status === 'open')
     .filter(a => leave.from_date <= a.last_absent_date && leave.to_date >= a.first_absent_date)
@@ -142,19 +160,7 @@ router.post('/grant', requireAuth, requireAdmin, (req, res) => {
     if (error) return res.status(400).json({ success: false, message: error });
     const reason = typeof req.body.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
 
-    const leave = db.insert('leaves', {
-      student_id: student.id,
-      from_date,
-      to_date,
-      reason: reason || 'Approved by admin',
-      status: 'approved',
-      requested_by: 'admin',
-      admin_note: '',
-      reviewed_by: req.user.id,
-      reviewed_at: new Date().toISOString()
-    });
-
-    afterApproval(req, leave, student);
+    const leave = grantLeave(req, student, from_date, to_date, reason);
     logAudit(req, 'LEAVE_GRANTED', `Admin granted leave for student ID ${student.student_id}: ${from_date} to ${to_date}`);
     return res.status(201).json({ success: true, message: 'Leave approved. Absence alerts for these days have stopped.', data: enrichLeave(leave) });
   } catch (err) {
@@ -163,39 +169,50 @@ router.post('/grant', requireAuth, requireAdmin, (req, res) => {
   }
 });
 
+// Applies an approve/reject decision to one pending leave. Returns the updated leave or an error string.
+function decideLeave(req, leave, decision, admin_note = '') {
+  if (leave.status !== 'pending') return `This leave is already ${leave.status}.`;
+  const student = db.findById('students', leave.student_id);
+  const updated = db.update('leaves', leave.id, {
+    status: decision,
+    admin_note,
+    reviewed_by: req.user.id,
+    reviewed_at: new Date().toISOString()
+  });
+
+  if (student && decision === 'approved') {
+    afterApproval(req, updated, student);
+  } else if (student) {
+    const user = db.findById('users', student.user_id);
+    db.insert('notifications', {
+      user_id: student.user_id,
+      title: 'Leave Not Approved',
+      message: `Your leave from ${leave.from_date} to ${leave.to_date} was not approved.${admin_note ? ` Note: ${admin_note}` : ''}`,
+      type: 'leave_rejected',
+      link: '/student/attendance',
+      is_read: false
+    });
+    notifyStudentTrainer(
+      student,
+      'Student Leave Not Approved',
+      `${user ? user.name : 'Your student'}'s leave from ${leave.from_date} to ${leave.to_date} was not approved, so they are expected in class.`,
+      'leave_rejected'
+    );
+  }
+
+  logAudit(req, decision === 'approved' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED', `Leave ${leave.id} ${decision} (${leave.from_date} to ${leave.to_date})`);
+  return updated;
+}
+
 function reviewLeave(decision) {
   return (req, res) => {
     try {
       const leave = db.findById('leaves', req.params.id);
       if (!leave) return res.status(404).json({ success: false, message: 'Leave not found.' });
-      if (leave.status !== 'pending') {
-        return res.status(400).json({ success: false, message: `This leave is already ${leave.status}.` });
-      }
-      const student = db.findById('students', leave.student_id);
       const admin_note = typeof req.body?.admin_note === 'string' ? req.body.admin_note.trim().slice(0, 500) : '';
-
-      const updated = db.update('leaves', leave.id, {
-        status: decision,
-        admin_note,
-        reviewed_by: req.user.id,
-        reviewed_at: new Date().toISOString()
-      });
-
-      if (student && decision === 'approved') {
-        afterApproval(req, updated, student);
-      } else if (student) {
-        db.insert('notifications', {
-          user_id: student.user_id,
-          title: 'Leave Not Approved',
-          message: `Your leave from ${leave.from_date} to ${leave.to_date} was not approved.${admin_note ? ` Note: ${admin_note}` : ''}`,
-          type: 'leave_rejected',
-          link: '/student/attendance',
-          is_read: false
-        });
-      }
-
-      logAudit(req, decision === 'approved' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED', `Leave ${leave.id} ${decision} (${leave.from_date} to ${leave.to_date})`);
-      return res.json({ success: true, message: `Leave ${decision}.`, data: enrichLeave(updated) });
+      const result = decideLeave(req, leave, decision, admin_note);
+      if (typeof result === 'string') return res.status(400).json({ success: false, message: result });
+      return res.json({ success: true, message: `Leave ${decision}.`, data: enrichLeave(result) });
     } catch (err) {
       console.error('Review leave error:', err);
       return res.status(500).json({ success: false, message: 'Failed to update leave.' });
@@ -203,7 +220,35 @@ function reviewLeave(decision) {
   };
 }
 
+// POST /api/leaves/bulk/approve | /api/leaves/bulk/reject - every pending leave, or only body.ids
+function bulkReview(decision) {
+  return (req, res) => {
+    try {
+      const ids = Array.isArray(req.body?.ids) ? new Set(req.body.ids.map(String)) : null;
+      const admin_note = typeof req.body?.admin_note === 'string' ? req.body.admin_note.trim().slice(0, 500) : '';
+      const pending = db.find('leaves', l => l.status === 'pending' && (!ids || ids.has(String(l.id))));
+      pending.forEach(l => decideLeave(req, l, decision, admin_note));
+      const verb = decision === 'approved' ? 'approved' : 'rejected';
+      return res.json({ success: true, count: pending.length, message: `${pending.length} leave request(s) ${verb}.` });
+    } catch (err) {
+      console.error('Bulk leave review error:', err);
+      return res.status(500).json({ success: false, message: 'Failed to update leave requests.' });
+    }
+  };
+}
+
+router.post('/bulk/approve', requireAuth, requireAdmin, bulkReview('approved'));
+router.post('/bulk/reject', requireAuth, requireAdmin, bulkReview('rejected'));
 router.post('/:id/approve', requireAuth, requireAdmin, reviewLeave('approved'));
 router.post('/:id/reject', requireAuth, requireAdmin, reviewLeave('rejected'));
+
+// GET /api/leaves/trainer - Trainer: leaves of the students who chose them
+router.get('/trainer', requireAuth, requireTrainer, (req, res) => {
+  const ids = new Set(db.getTrainerStudents(req.trainerProfile?.id).map(s => String(s.id)));
+  const leaves = db.find('leaves', l => ids.has(String(l.student_id)))
+    .sort((a, b) => b.from_date.localeCompare(a.from_date))
+    .map(enrichLeave);
+  return res.json({ success: true, count: leaves.length, data: leaves });
+});
 
 export default router;

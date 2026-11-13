@@ -19,6 +19,7 @@ import { api } from '../../services/api';
 import { DataTable } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
+import { formatDate } from '../../utils/time';
 
 export function AdminComplaints() {
   const toast = useToast();
@@ -128,7 +129,7 @@ export function AdminComplaints() {
       sortable: true,
       render: (c) => (
         <span className="text-xs text-slate-500 font-mono">
-          {new Date(c.created_at).toLocaleDateString()}
+          {formatDate(c.created_at)}
         </span>
       )
     },
