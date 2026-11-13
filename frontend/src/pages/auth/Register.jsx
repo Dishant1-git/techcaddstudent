@@ -19,13 +19,14 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { ClassDetailsFields, validateClassDetails } from '../../components/common/ClassDetailsFields';
 import { ProgramFields, validateProgram } from '../../components/common/ProgramFields';
+import { CourseSelect } from '../../components/common/CourseSelect';
 
 export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [domain, setDomain] = useState('');
-  const [program, setProgram] = useState({ program_type: '', program_duration: '', course_id: '' });
+  const [course, setCourse] = useState(null);
+  const [program, setProgram] = useState({ program_type: '', program_duration: '' });
   const [classDetails, setClassDetails] = useState({ trainer_id: '', class_start_time: '', class_end_time: '' });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -53,9 +54,14 @@ export function Register() {
       return;
     }
 
-    const programError = validateProgram(program, { withCourse: true });
+    const programError = validateProgram(program);
     if (programError) {
       toast.warning(programError);
+      return;
+    }
+
+    if (program.program_type === 'course' && !course) {
+      toast.warning('Please choose your course in Domain / Field of Interest.');
       return;
     }
 
@@ -67,7 +73,11 @@ export function Register() {
 
     setLoading(true);
     try {
-      const res = await registerStudent({ name, email, phone, domain, password, ...program, ...classDetails });
+      const res = await registerStudent({
+        name, email, phone, password, ...program, ...classDetails,
+        course_id: course?.id || null,
+        domain: course?.course_name || ''
+      });
       if (res && res.pendingApproval) {
         setSubmittedPending(true);
       }
@@ -205,33 +215,21 @@ export function Register() {
                 />
               </Field>
 
-              <Field label="Domain / Field of Interest" icon={BookOpen}>
-                <input
-                  type="text"
-                  list="domain-options"
-                  value={domain}
-                  onChange={(event) => setDomain(event.target.value)}
-                  placeholder="e.g. Web Development, CAD / Mechanical, Data Science"
-                  className="field-input"
-                />
-                <datalist id="domain-options">
-                  <option value="Full-Stack Web Development" />
-                  <option value="CAD / CAM & Mechanical Design" />
-                  <option value="Civil & Architectural Design" />
-                  <option value="Data Science & Machine Learning" />
-                  <option value="Cybersecurity & Cloud Infrastructure" />
-                  <option value="UI/UX Product Design" />
-                  <option value="Digital Marketing & SEO" />
-                  <option value="Python & AI Development" />
-                  <option value="AutoCAD 2D/3D & SolidWorks" />
-                  <option value="Industrial Automation / PLC" />
-                </datalist>
-              </Field>
-
               <div>
                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Joining for</p>
-                <ProgramFields value={program} onChange={setProgram} withCourse />
+                <ProgramFields value={program} onChange={setProgram} />
               </div>
+
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Domain / Field of Interest{program.program_type === 'training' ? ' (optional)' : ''}
+                <span className="block mt-1.5">
+                  <CourseSelect
+                    value={course?.id}
+                    onChange={setCourse}
+                    placeholder={program.program_type === 'training' ? 'Select a field (optional)' : 'Select your course / field'}
+                  />
+                </span>
+              </label>
 
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
                 <p className="text-xs font-bold text-indigo-900">Your class</p>

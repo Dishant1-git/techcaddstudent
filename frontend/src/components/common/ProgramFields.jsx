@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BookOpen, Wrench, Check, GraduationCap } from 'lucide-react';
-import { api } from '../../services/api';
+import React from 'react';
+import { BookOpen, Wrench, Check } from 'lucide-react';
 
 export const PROGRAM_TYPE_OPTIONS = [
   { value: 'course', label: 'Course', hint: 'Full learning program', icon: BookOpen },
@@ -14,35 +13,16 @@ export const PROGRAM_DURATION_OPTIONS = [
   { value: '120_hours', label: '120 Hours' }
 ];
 
-// withCourse: the course dropdown is part of the form, and required when joining a Course
-export function validateProgram({ program_type, program_duration, course_id }, { withCourse = false } = {}) {
+export function validateProgram({ program_type, program_duration }) {
   if (!program_type) return 'Please choose Course or Training.';
-  if (withCourse && program_type === 'course' && !course_id) return 'Please choose your course.';
   if (program_type === 'training' && !program_duration) return 'Please choose the training duration.';
   return '';
 }
 
-// Active courses the admin has added, for the dropdown
-function useCourseOptions(enabled) {
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(enabled);
-  useEffect(() => {
-    if (!enabled) return undefined;
-    let active = true;
-    api.getCourseOptions()
-      .then(res => { if (active) setCourses(res.data || []); })
-      .catch(() => {})
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [enabled]);
-  return { courses, loading };
-}
-
 // Course / Training choice. The duration row only appears for Training.
-// value: { program_type, program_duration, course_id? }. withCourse adds the course dropdown.
-export function ProgramFields({ value, onChange, disabled = false, withCourse = false }) {
+// value: { program_type, program_duration }
+export function ProgramFields({ value, onChange, disabled = false }) {
   const isTraining = value.program_type === 'training';
-  const { courses, loading: loadingCourses } = useCourseOptions(withCourse);
 
   const pickType = (type) => {
     if (disabled || type === value.program_type) return;
@@ -118,38 +98,6 @@ export function ProgramFields({ value, onChange, disabled = false, withCourse = 
         </div>
       </div>
 
-      {/* Course dropdown, once Course or Training is chosen */}
-      {withCourse && (
-        <div className={`grid transition-all duration-300 ease-out ${value.program_type ? 'grid-rows-[1fr] opacity-100 mt-3' : 'grid-rows-[0fr] opacity-0 mt-0'}`} aria-hidden={!value.program_type}>
-          <div className="overflow-hidden">
-            <label className="block">
-              <span className="sr-only">{isTraining ? 'Training subject' : 'Course'}</span>
-              <span className="relative block">
-                <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <select
-                  value={value.course_id ? String(value.course_id) : ''}
-                  onChange={(e) => onChange({ ...value, course_id: e.target.value })}
-                  disabled={disabled || loadingCourses || !value.program_type}
-                  tabIndex={value.program_type ? 0 : -1}
-                  className="field-input"
-                >
-                  <option value="">
-                    {loadingCourses ? 'Loading courses...' : isTraining ? 'Training in (optional)' : 'Select your course'}
-                  </option>
-                  {courses.map(c => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.course_name}{c.duration && !isTraining ? ` · ${c.duration}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </span>
-              {!loadingCourses && courses.length === 0 && value.program_type && (
-                <span className="block mt-1 text-[11px] text-amber-700">No courses have been added yet. Please ask the admin.</span>
-              )}
-            </label>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
