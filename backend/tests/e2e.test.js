@@ -105,8 +105,16 @@ async function runE2ETests() {
     const noProgramReg = await req('/auth/register', 'POST', { name: 'No Program', email: `no.program.${Date.now()}@portal.edu`, password: 'password123', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
     assert(noProgramReg.status === 400, 'Registration requires choosing Course/Training and duration');
 
-    const courseReg = await req('/auth/register', 'POST', { name: 'Course Only', email: `course.only.${Date.now()}@portal.edu`, password: 'password123', program_type: 'course', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
-    assert(courseReg.status === 201, 'Course registration needs no duration');
+    const courseOptions = await req('/courses/options');
+    assert(courseOptions.ok && courseOptions.data.data.length > 0, 'Public course dropdown lists the admin\'s courses');
+    const pickCourseId = courseOptions.data.data[0]?.id;
+    const courseNoPick = await req('/auth/register', 'POST', { name: 'Course No Pick', email: `course.np.${Date.now()}@portal.edu`, password: 'password123', program_type: 'course', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(courseNoPick.status === 400, 'Course registration requires choosing a course');
+    const courseEmail = `course.only.${Date.now()}@portal.edu`;
+    const courseReg = await req('/auth/register', 'POST', { name: 'Course Only', email: courseEmail, password: 'password123', program_type: 'course', course_id: pickCourseId, trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(courseReg.status === 201, 'Course registration with a course and no duration succeeds');
+    const sixWeeks = await req('/auth/register', 'POST', { name: 'Six Weeks', email: `six.weeks.${Date.now()}@portal.edu`, password: 'password123', program_type: 'training', program_duration: '6_weeks', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
+    assert(sixWeeks.status === 201, 'Training can be 6 weeks');
     const trainingNoDuration = await req('/auth/register', 'POST', { name: 'Training No Duration', email: `training.nd.${Date.now()}@portal.edu`, password: 'password123', program_type: 'training', trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' });
     assert(trainingNoDuration.status === 400, 'Training registration requires a duration');
 
@@ -342,6 +350,12 @@ async function runE2ETests() {
     // Program shows to admin and trainer
     const aliceRow = (await req('/students?status=active', 'GET', null, adminToken)).data.data.find(s => s.email === testEmail);
     assert(aliceRow?.program_label === 'Training (45 Days)' && aliceRow.expected_end_date, 'Student program and expected end date are stored');
+    const allRows = (await req('/students', 'GET', null, adminToken)).data.data;
+    const courseRow = allRows.find(s => s.email === courseEmail);
+    assert(courseRow && String(courseRow.course_id) === String(pickCourseId) && courseRow.program_label === 'Course', 'Chosen course is saved on the student');
+    const sixRow = allRows.find(s => s.name === 'Six Weeks');
+    const expect6w = (() => { const d = new Date(`${sixRow?.joined_on}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 41); return d.toISOString().slice(0, 10); })();
+    assert(sixRow?.program_label === 'Training (6 Weeks)' && sixRow.expected_end_date === expect6w, '6-week training ends 6 weeks after joining');
     const trainerStudents = await req('/students', 'GET', null, trainerToken);
     assert(trainerStudents.ok && trainerStudents.data.data.every(s => 'program_label' in s), 'Trainer sees each student\'s program');
 

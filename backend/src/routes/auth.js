@@ -45,7 +45,7 @@ function toSafeUser(user) {
 // POST /api/auth/register - Public student self-registration
 router.post('/register', authLoginLimiter, async (req, res) => {
   try {
-    const { name, email, password, phone, domain, trainer_id, class_start_time, class_end_time, program_type, program_duration } = req.body;
+    const { name, email, password, phone, domain, course_id, trainer_id, class_start_time, class_end_time, program_type, program_duration } = req.body;
     const cleanName = typeof name === 'string' ? name.trim() : '';
     const cleanEmail = db.normalizeEmail(email);
     const cleanDomain = typeof domain === 'string' ? domain.trim() : '';
@@ -75,6 +75,15 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: program.error });
     }
 
+    // Course picked from the admin's list: required for a Course, optional for a Training
+    const course = course_id ? db.findById('courses', course_id) : null;
+    if (course_id && (!course || (course.status || 'active') !== 'active')) {
+      return res.status(400).json({ success: false, message: 'Please choose a course from the list.' });
+    }
+    if (program.program_type === 'course' && !course) {
+      return res.status(400).json({ success: false, message: 'Please choose your course.' });
+    }
+
     const classChoice = validateClassChoice({ trainer_id, class_start_time, class_end_time });
     if (classChoice.error) {
       return res.status(400).json({ success: false, message: classChoice.error });
@@ -95,7 +104,7 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       user_id: user.id,
       student_id: createStudentCode(),
       domain: cleanDomain,
-      course_id: null,
+      course_id: course ? course.id : null,
       trainer_id: classChoice.trainer.id,
       class_start_time: classChoice.start,
       class_end_time: classChoice.end,
@@ -122,7 +131,7 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       db.insert('notifications', {
         user_id: admin.id,
         title: 'New Student Registration Pending',
-        message: `Student ${cleanName} (${cleanEmail})${cleanDomain ? ` [Domain: ${cleanDomain}]` : ''} has registered for ${programLabel(program.program_type, program.program_duration)} and requires verification.`,
+        message: `Student ${cleanName} (${cleanEmail})${cleanDomain ? ` [Domain: ${cleanDomain}]` : ''} has registered for ${programLabel(program.program_type, program.program_duration)}${course ? ` in ${course.course_name}` : ''} and requires verification.`,
         type: 'student_registration',
         link: '/admin/students?status=pending_approval',
         is_read: false

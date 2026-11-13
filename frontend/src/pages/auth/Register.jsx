@@ -25,7 +25,7 @@ export function Register() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [domain, setDomain] = useState('');
-  const [program, setProgram] = useState({ program_type: '', program_duration: '' });
+  const [program, setProgram] = useState({ program_type: '', program_duration: '', course_id: '' });
   const [classDetails, setClassDetails] = useState({ trainer_id: '', class_start_time: '', class_end_time: '' });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -53,7 +53,7 @@ export function Register() {
       return;
     }
 
-    const programError = validateProgram(program);
+    const programError = validateProgram(program, { withCourse: true });
     if (programError) {
       toast.warning(programError);
       return;
@@ -230,7 +230,7 @@ export function Register() {
 
               <div>
                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Joining for</p>
-                <ProgramFields value={program} onChange={setProgram} />
+                <ProgramFields value={program} onChange={setProgram} withCourse />
               </div>
 
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">

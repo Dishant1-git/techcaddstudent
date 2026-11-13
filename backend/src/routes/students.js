@@ -13,7 +13,7 @@ export function validateProgram({ program_type, program_duration } = {}) {
   if (!PROGRAM_TYPES[program_type]) return { error: 'Please choose whether this is a Course or a Training.' };
   // Only trainings have a fixed length; a course has none
   if (program_type === 'course') return { program_type, program_duration: null };
-  if (!PROGRAM_DURATIONS[program_duration]) return { error: 'Please choose the training duration: 45 Days, 6 Months, or 120 Hours.' };
+  if (!PROGRAM_DURATIONS[program_duration]) return { error: 'Please choose the training duration: 45 Days, 6 Weeks, 6 Months, or 120 Hours.' };
   return { program_type, program_duration };
 }
 

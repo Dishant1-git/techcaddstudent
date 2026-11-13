@@ -28,7 +28,7 @@ export const ENROLLMENT_STATUSES = ['running', 'hold', 'completed', 'dropped'];
 
 // What the student signed up for, and how long it runs
 export const PROGRAM_TYPES = { course: 'Course', training: 'Training' };
-export const PROGRAM_DURATIONS = { '45_days': '45 Days', '6_months': '6 Months', '120_hours': '120 Hours' };
+export const PROGRAM_DURATIONS = { '45_days': '45 Days', '6_weeks': '6 Weeks', '6_months': '6 Months', '120_hours': '120 Hours' };
 
 export function programLabel(type, duration) {
   if (!PROGRAM_TYPES[type]) return 'Not set';
@@ -464,6 +464,8 @@ class Database {
     let hoursCompleted = null;
     if (student.program_duration === '45_days') {
       expectedEndDate = addDays(joinedOn, 44);
+    } else if (student.program_duration === '6_weeks') {
+      expectedEndDate = addDays(joinedOn, 41);
     } else if (student.program_duration === '6_months') {
       const d = new Date(`${joinedOn}T00:00:00.000Z`);
       d.setUTCMonth(d.getUTCMonth() + 6);

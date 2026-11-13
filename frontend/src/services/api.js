@@ -86,6 +86,7 @@ export const api = {
 
   // Courses
   getCourses: () => request('/courses'),
+  getCourseOptions: () => request('/courses/options'),
   getCourse: (id) => request(`/courses/${id}`),
   createCourse: (data) => request('/courses', { method: 'POST', body: JSON.stringify(data) }),
   updateCourse: (id, data) => request(`/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -23,6 +23,19 @@ router.get('/', requireAuth, (req, res) => {
   }
 });
 
+// GET /api/courses/options - Public list of active courses for the registration dropdown
+router.get('/options', (req, res) => {
+  try {
+    const options = db.find('courses', c => (c.status || 'active') === 'active')
+      .map(c => ({ id: c.id, course_name: c.course_name, code: c.code || '', duration: c.duration || '' }))
+      .sort((a, b) => a.course_name.localeCompare(b.course_name));
+    return res.json({ success: true, count: options.length, data: options });
+  } catch (err) {
+    console.error('Fetch course options error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load courses.' });
+  }
+});
+
 // GET /api/courses/:id
 router.get('/:id', requireAuth, (req, res) => {
   try {
