@@ -12,6 +12,7 @@ import { StudentDashboard } from './pages/student/StudentDashboard';
 import { StudentAttendance } from './pages/student/StudentAttendance';
 import { StudentComplaints } from './pages/student/StudentComplaints';
 import { StudentProfile } from './pages/student/StudentProfile';
+import { StudentSuggestions } from './pages/student/StudentSuggestions';
 
 // Trainer Pages
 import { TrainerDashboard } from './pages/trainer/TrainerDashboard';
@@ -32,6 +33,7 @@ import { AdminAuditLogs } from './pages/admin/AdminAuditLogs';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminAbsences } from './pages/admin/AdminAbsences';
 import { AdminStudentReport } from './pages/admin/AdminStudentReport';
+import { AdminSuggestions } from './pages/admin/AdminSuggestions';
 
 // Shared
 import { NotificationsPage } from './pages/common/NotificationsPage';
@@ -93,6 +95,7 @@ export function App() {
         <Route path="attendance" element={<StudentAttendance />} />
         <Route path="complaints" element={<StudentComplaints />} />
         <Route path="profile" element={<StudentProfile />} />
+        <Route path="suggestions" element={<StudentSuggestions />} />
         <Route path="notifications" element={<NotificationsPage />} />
       </Route>
 
@@ -130,6 +133,7 @@ export function App() {
         <Route path="reports" element={<AdminReports />} />
         <Route path="absences" element={<AdminAbsences />} />
         <Route path="student-report" element={<AdminStudentReport />} />
+        <Route path="suggestions" element={<AdminSuggestions />} />
         <Route path="complaints" element={<AdminComplaints />} />
         <Route path="audit-logs" element={<AdminAuditLogs />} />
         <Route path="settings" element={<AdminSettings />} />

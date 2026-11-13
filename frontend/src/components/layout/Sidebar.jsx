@@ -20,7 +20,8 @@ import {
   PlusCircle,
   X,
   CalendarOff,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lightbulb
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -33,6 +34,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { to: '/student/attendance', label: 'My Attendance', icon: CalendarCheck },
     { to: '/student/complaints', label: 'Report Complaint', icon: AlertOctagon },
+    { to: '/student/suggestions', label: 'Suggestions', icon: Lightbulb },
     { to: '/student/profile', label: 'My Profile', icon: User },
     { to: '/student/notifications', label: 'Notifications', icon: Bell, badge: unreadCount }
   ];
@@ -56,6 +58,7 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/admin/student-report', label: 'Student Report', icon: FileSpreadsheet },
     { to: '/admin/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/admin/complaints', label: 'Complaints Hub', icon: AlertOctagon },
+    { to: '/admin/suggestions', label: 'Suggestion Box', icon: Lightbulb },
     { to: '/admin/audit-logs', label: 'Audit Trail', icon: History },
     { to: '/admin/notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
     { to: '/admin/settings', label: 'Portal Settings', icon: Settings }

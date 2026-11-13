@@ -22,6 +22,7 @@ const defaultSchema = {
   password_requests: [],
   leaves: [],
   absence_alerts: [],
+  suggestions: [],
 };
 
 export const ENROLLMENT_STATUSES = ['running', 'hold', 'completed', 'dropped'];

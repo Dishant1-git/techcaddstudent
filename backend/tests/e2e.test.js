@@ -381,6 +381,28 @@ async function runE2ETests() {
     const studentReport = await req('/analytics/student-report', 'GET', null, studentToken);
     assert(studentReport.status === 403, 'Students cannot access the student report sheet');
 
+    // 9.3 Suggestion box
+    console.log('\n--- Testing Student Suggestions ---');
+    const sugg = await req('/suggestions', 'POST', { category: 'Timings', title: 'Evening slot', message: 'Please add a 7 PM batch for working students.' }, studentToken);
+    assert(sugg.status === 201 && sugg.data.data.status === 'new', 'Student sends a suggestion');
+    const anon = await req('/suggestions', 'POST', { category: 'Facilities', message: 'More chairs in lab 2 please.', anonymous: true }, studentToken);
+    assert(anon.status === 201, 'Student sends an anonymous suggestion');
+    const tooShort = await req('/suggestions', 'POST', { message: 'hi' }, studentToken);
+    assert(tooShort.status === 400, 'Empty or too-short suggestions are rejected');
+    const adminSugg = await req('/suggestions', 'GET', null, adminToken);
+    const anonRow = adminSugg.data.data.find(x => x.id === anon.data.data.id);
+    const namedRow = adminSugg.data.data.find(x => x.id === sugg.data.data.id);
+    assert(adminSugg.ok && namedRow?.student_name === 'John Doe', 'Admin sees suggestions with the student name');
+    assert(anonRow && anonRow.student_name === 'Anonymous' && anonRow.student_id === undefined, 'Anonymous suggestions hide the student from the admin');
+    const adminNotifsSugg = (await req('/notifications', 'GET', null, adminToken)).data.data;
+    assert(adminNotifsSugg.some(n => n.type === 'suggestion'), 'Admin is notified of new suggestions');
+    const trainerSugg = await req('/suggestions', 'GET', null, trainerToken);
+    assert(trainerSugg.status === 403, 'Trainers cannot read the suggestion box');
+    const replyRes = await req(`/suggestions/${anon.data.data.id}`, 'PUT', { status: 'planned', admin_reply: 'Ordering this week.' }, adminToken);
+    assert(replyRes.ok && replyRes.data.data.status === 'planned' && replyRes.data.data.student_name === 'Anonymous', 'Admin replies and sets status without revealing the author');
+    const mySugg = await req('/suggestions/my', 'GET', null, studentToken);
+    assert(mySugg.ok && mySugg.data.data.find(x => x.id === anon.data.data.id)?.admin_reply === 'Ordering this week.', 'Student sees the admin reply on their suggestion');
+
     // 10. Real-Time Notifications
     console.log('\n--- Testing Real-Time Notifications ---');
     const studentNotifs = await req('/notifications', 'GET', null, studentToken);

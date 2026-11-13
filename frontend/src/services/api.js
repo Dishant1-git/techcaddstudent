@@ -141,6 +141,12 @@ export const api = {
   // AI assistant
   askAssistant: (message, history = []) => request('/assistant/chat', { method: 'POST', body: JSON.stringify({ message, history }) }),
 
+  // Suggestion box
+  submitSuggestion: (data) => request('/suggestions', { method: 'POST', body: JSON.stringify(data) }),
+  getMySuggestions: () => request('/suggestions/my'),
+  getSuggestions: (status) => request(`/suggestions${status ? `?status=${status}` : ''}`),
+  updateSuggestion: (id, data) => request(`/suggestions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   // Leaves & absence alerts
   requestLeave: (data) => request('/leaves', { method: 'POST', body: JSON.stringify(data) }),
   getMyLeaves: () => request('/leaves/my'),
