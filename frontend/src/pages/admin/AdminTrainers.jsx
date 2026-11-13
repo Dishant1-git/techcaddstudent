@@ -219,11 +219,11 @@ export function AdminTrainers() {
       render: (t) => <span className="font-medium text-xs text-slate-800">{t.specialization}</span>
     },
     {
-      header: 'Assigned Batches',
-      key: 'assigned_batches',
+      header: 'Students',
+      key: 'assigned_students_count',
       render: (t) => (
         <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-          {t.assigned_batches?.length || 0} Batches
+          {t.assigned_students_count || 0} Students
         </span>
       )
     },
@@ -572,7 +572,7 @@ export function AdminTrainers() {
                     <div key={s.id} className="p-2.5 flex items-center justify-between hover:bg-slate-50 text-xs">
                       <div>
                         <span className="font-bold text-slate-800">{s.name}</span>
-                        <div className="text-[10px] text-slate-400">{s.student_id} • {s.batch_name}</div>
+                        <div className="text-[10px] text-slate-400">{s.student_id}{s.class_timing ? ` • ${s.class_timing}` : ''}</div>
                       </div>
                       <span className="font-bold text-indigo-600 text-xs">{s.stats?.attendancePercentage || 100}% attendance</span>
                     </div>

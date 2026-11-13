@@ -87,7 +87,7 @@ export function TrainerDashboard() {
   };
 
   const cards = data?.cards || {
-    assignedBatches: 0,
+    todayClasses: 0,
     assignedCourses: 0,
     assignedStudents: 0,
     todayClasses: 0,
@@ -130,18 +130,18 @@ export function TrainerDashboard() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Assigned Batches"
-          value={cards.assignedBatches}
+          title="Class Time Slots"
+          value={cards.todayClasses}
           icon={Layers}
           accent="indigo"
-          description="Active cohorts under your instruction"
+          description="Timings chosen by your students"
         />
         <StatCard
           title="Assigned Students"
           value={cards.assignedStudents}
           icon={Users}
           accent="sky"
-          description="Enrolled in your batches"
+          description="Students who chose you"
         />
         <StatCard
           title="Pending Verification"
@@ -159,7 +159,7 @@ export function TrainerDashboard() {
         />
       </div>
 
-      {/* Main Grid: Pending Action Table & Assigned Batches */}
+      {/* Main Grid: Pending Action Table & Class Timings */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Pending Verifications Widget (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
@@ -200,7 +200,7 @@ export function TrainerDashboard() {
                       <tr key={rec.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3 px-3">
                           <div className="font-bold text-slate-900">{rec.student_name}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{rec.student_code} • {rec.batch_name}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{rec.student_code}{rec.class_timing ? ` • ${rec.class_timing}` : ''}</div>
                         </td>
                         <td className="py-3 px-3">
                           <div className="font-semibold text-slate-800">{rec.session}</div>
@@ -236,7 +236,7 @@ export function TrainerDashboard() {
                   <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
                   <h4 className="font-bold text-sm text-slate-700">All Attendance Verified</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    No pending attendance verifications for your assigned batches.
+                    No pending attendance verifications for your students.
                   </p>
                 </div>
               )}
@@ -244,28 +244,27 @@ export function TrainerDashboard() {
           </div>
         </div>
 
-        {/* Right Column: Today's Assigned Batches (4 cols) */}
+        {/* Right Column: Class timings chosen by students (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
             <h2 className="font-bold text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-600" />
-              Assigned Batches
+              My Class Timings
             </h2>
 
             <div className="space-y-3">
-              {data?.todayBatches?.length > 0 ? (
-                data.todayBatches.map((batch) => (
-                  <div key={batch.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-xs text-slate-900">{batch.batch_name}</h4>
-                      <StatusBadge status={batch.status} />
-                    </div>
-                    <div className="text-xs text-slate-500 flex items-center gap-1.5">
+              {data?.todayClasses?.length > 0 ? (
+                data.todayClasses.map((slot) => (
+                  <div key={slot.class_timing} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+                    <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>{batch.schedule_time}</span>
+                      <span>{slot.class_timing}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate" title={slot.students.join(', ')}>
+                      {slot.students.join(', ')}
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-200/60">
-                      <span>Max Capacity: {batch.max_students}</span>
+                      <span>{slot.student_count} student{slot.student_count === 1 ? '' : 's'}</span>
                       <Link to="/trainer/students" className="text-indigo-600 font-semibold hover:underline">
                         View Students →
                       </Link>
@@ -274,7 +273,7 @@ export function TrainerDashboard() {
                 ))
               ) : (
                 <div className="py-8 text-center text-slate-400 text-xs">
-                  No active batches assigned.
+                  No students have chosen you yet.
                 </div>
               )}
             </div>

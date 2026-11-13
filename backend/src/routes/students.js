@@ -1,16 +1,34 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { db } from '../db/database.js';
-import { requireAuth, requireAdmin, requireTrainerOrAdmin } from '../middleware/auth.js';
+import { db, toTime24 } from '../db/database.js';
+import { requireAuth, requireAdmin, requireStudent, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
-import { resetFailedLogins } from '../middleware/security.js';
+import { resetFailedLogins, validatePasswordPolicy } from '../middleware/security.js';
 
 const router = express.Router();
+
+// Shared validation for a student's trainer + class timing choice
+export function validateClassChoice({ trainer_id, class_start_time, class_end_time } = {}) {
+  const trainer = trainer_id ? db.findById('trainers', trainer_id) : null;
+  const trainerUser = trainer ? db.findById('users', trainer.user_id) : null;
+  if (!trainer || !trainerUser || trainerUser.status !== 'active') {
+    return { error: 'Please choose your trainer from the list.' };
+  }
+  const start = toTime24(class_start_time);
+  const end = toTime24(class_end_time);
+  if (!start || !end) {
+    return { error: 'Please enter your class start and end time.' };
+  }
+  if (end <= start) {
+    return { error: 'Class end time must be after the start time.' };
+  }
+  return { trainer, start, end };
+}
 
 // GET /api/students - List students (Admin sees all; Trainer sees assigned only)
 router.get('/', requireAuth, requireTrainerOrAdmin, (req, res) => {
   try {
-    const { batch_id, course_id, trainer_id, search, status } = req.query;
+    const { course_id, trainer_id, search, status } = req.query;
     let students = db.find('students');
 
     // If Trainer, filter to assigned students only!
@@ -19,17 +37,11 @@ router.get('/', requireAuth, requireTrainerOrAdmin, (req, res) => {
       if (!trainer) {
         return res.json({ success: true, count: 0, data: [] });
       }
-      const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
-      students = students.filter(s => 
-        String(s.trainer_id) === String(trainer.id) || (s.batch_id && trainerBatches.includes(String(s.batch_id)))
-      );
+      students = students.filter(s => String(s.trainer_id) === String(trainer.id));
     } else if (trainer_id) {
       students = students.filter(s => String(s.trainer_id) === String(trainer_id));
     }
 
-    if (batch_id) {
-      students = students.filter(s => String(s.batch_id) === String(batch_id));
-    }
     if (course_id) {
       students = students.filter(s => String(s.course_id) === String(course_id));
     }
@@ -46,7 +58,7 @@ router.get('/', requireAuth, requireTrainerOrAdmin, (req, res) => {
         s.name.toLowerCase().includes(q) ||
         s.email.toLowerCase().includes(q) ||
         (s.student_id && s.student_id.toLowerCase().includes(q)) ||
-        (s.batch_name && s.batch_name.toLowerCase().includes(q))
+        (s.trainer_name && s.trainer_name.toLowerCase().includes(q))
       );
     }
 
@@ -77,6 +89,109 @@ router.get('/me', requireAuth, (req, res) => {
   }
 });
 
+// PUT /api/students/me/class - Student picks their trainer and class timing
+router.put('/me/class', requireAuth, requireStudent, (req, res) => {
+  try {
+    const student = db.findOne('students', s => String(s.user_id) === String(req.user.id));
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student profile not found.' });
+    }
+
+    const result = validateClassChoice(req.body);
+    if (result.error) {
+      return res.status(400).json({ success: false, message: result.error });
+    }
+
+    const trainerChanged = String(student.trainer_id) !== String(result.trainer.id);
+    const updated = db.update('students', student.id, {
+      trainer_id: result.trainer.id,
+      class_start_time: result.start,
+      class_end_time: result.end
+    });
+
+    if (trainerChanged) {
+      db.insert('notifications', {
+        user_id: result.trainer.user_id,
+        title: 'New Student Joined Your Class',
+        message: `${req.user.name} selected you as their trainer.`,
+        type: 'student_assigned',
+        link: '/trainer/students',
+        is_read: false
+      });
+    }
+
+    logAudit(req, 'STUDENT_CLASS_UPDATED', `Student ${req.user.name} set trainer ID ${result.trainer.id}, timing ${result.start}-${result.end}`);
+
+    return res.json({ success: true, message: 'Your class details have been saved.', data: db.getEnrichedStudent(updated) });
+  } catch (err) {
+    console.error('Update student class error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to save class details.' });
+  }
+});
+
+// GET /api/students/password-requests - Admin: pending password reset requests
+router.get('/password-requests', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const requests = db.find('password_requests', r => r.status === 'pending')
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(r => {
+        const student = db.findById('students', r.student_id);
+        const enriched = student ? db.getEnrichedStudent(student) : null;
+        return {
+          ...r,
+          student_name: enriched ? enriched.name : 'Unknown',
+          student_email: enriched ? enriched.email : r.email,
+          student_code: enriched ? enriched.student_id : 'N/A'
+        };
+      });
+    return res.json({ success: true, count: requests.length, data: requests });
+  } catch (err) {
+    console.error('Fetch password requests error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load password requests.' });
+  }
+});
+
+// POST /api/students/:id/reset-password - Admin sets a new password for a student
+router.post('/:id/reset-password', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const student = db.findById('students', req.params.id);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
+    }
+    const user = db.findById('users', student.user_id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User record not found.' });
+    }
+
+    const newPassword = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+    const check = validatePasswordPolicy(newPassword);
+    if (!check.isValid) {
+      return res.status(400).json({ success: false, message: check.message });
+    }
+
+    db.update('users', user.id, { password_hash: await bcrypt.hash(newPassword, 10) });
+    resetFailedLogins(user.email);
+
+    db.find('password_requests', r => String(r.student_id) === String(student.id) && r.status === 'pending')
+      .forEach(r => db.update('password_requests', r.id, { status: 'resolved', resolved_by: req.user.id, resolved_at: new Date().toISOString() }));
+
+    db.insert('notifications', {
+      user_id: user.id,
+      title: 'Password Changed by Admin',
+      message: 'Your password was reset by the administrator. Use the new password they shared with you to sign in.',
+      type: 'password_reset',
+      is_read: false
+    });
+
+    logAudit(req, 'STUDENT_PASSWORD_RESET', `Admin reset password for student ${user.name} (${user.email})`);
+
+    return res.json({ success: true, message: `Password updated for ${user.name}. Share the new password with the student.` });
+  } catch (err) {
+    console.error('Admin reset password error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to reset password.' });
+  }
+});
+
 // GET /api/students/:id - Detailed student view
 router.get('/:id', requireAuth, (req, res) => {
   try {
@@ -92,8 +207,7 @@ router.get('/:id', requireAuth, (req, res) => {
       }
     } else if (req.user.role === 'trainer') {
       const trainer = db.findOne('trainers', t => String(t.user_id) === String(req.user.id));
-      const trainerBatches = trainer ? db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id)) : [];
-      const isAssigned = trainer && (String(student.trainer_id) === String(trainer.id) || (student.batch_id && trainerBatches.includes(String(student.batch_id))));
+      const isAssigned = trainer && String(student.trainer_id) === String(trainer.id);
       if (!isAssigned) {
         return res.status(403).json({ success: false, message: 'Forbidden. This student is not assigned to you.' });
       }
@@ -129,7 +243,7 @@ router.get('/:id', requireAuth, (req, res) => {
 // POST /api/students - Admin add new student
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { name, email, password, student_id, domain, course_id, batch_id, trainer_id, phone, address, emergency_contact, avatar } = req.body;
+    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, phone, address, emergency_contact, avatar } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Name, email, and initial password are required.' });
@@ -155,28 +269,20 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       avatar: avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`
     });
 
-    // Auto-resolve trainer from batch if batch selected and trainer not explicitly set
-    let finalTrainerId = trainer_id;
-    if (!finalTrainerId && batch_id) {
-      const batch = db.findById('batches', batch_id);
-      if (batch && batch.trainer_id) {
-        finalTrainerId = batch.trainer_id;
-      }
-    }
-
     const student = db.insert('students', {
       user_id: user.id,
       student_id: nextCode,
       domain: domain ? domain.trim() : '',
       course_id: course_id ? Number(course_id) : null,
-      batch_id: batch_id ? Number(batch_id) : null,
-      trainer_id: finalTrainerId ? Number(finalTrainerId) : null,
+      trainer_id: trainer_id ? Number(trainer_id) : null,
+      class_start_time: toTime24(class_start_time),
+      class_end_time: toTime24(class_end_time),
       phone: phone ? phone.trim() : '',
       address: address ? address.trim() : '',
       emergency_contact: emergency_contact ? emergency_contact.trim() : ''
     });
 
-    logAudit(req, 'STUDENT_CREATED', `Created student account for ${name} (${nextCode}) assigned to batch ${batch_id || 'None'}`);
+    logAudit(req, 'STUDENT_CREATED', `Created student account for ${name} (${nextCode}) with trainer ${trainer_id || 'None'}`);
 
     const enriched = db.getEnrichedStudent(student);
     return res.status(201).json({ success: true, message: 'Student registered successfully', data: enriched });
@@ -197,7 +303,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found.' });
     }
 
-    const { name, email, password, student_id, domain, course_id, batch_id, trainer_id, phone, address, emergency_contact, status, avatar } = req.body;
+    const { name, email, password, student_id, domain, course_id, trainer_id, class_start_time, class_end_time, phone, address, emergency_contact, status, avatar } = req.body;
 
     // Update User record
     const userUpdates = {};
@@ -224,16 +330,9 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (student_id) studentUpdates.student_id = student_id.trim();
     if (domain !== undefined) studentUpdates.domain = typeof domain === 'string' ? domain.trim() : '';
     if (course_id !== undefined) studentUpdates.course_id = course_id ? Number(course_id) : null;
-    if (batch_id !== undefined) {
-      studentUpdates.batch_id = batch_id ? Number(batch_id) : null;
-      if (!trainer_id && batch_id) {
-        const batch = db.findById('batches', batch_id);
-        if (batch && batch.trainer_id) {
-          studentUpdates.trainer_id = batch.trainer_id;
-        }
-      }
-    }
     if (trainer_id !== undefined) studentUpdates.trainer_id = trainer_id ? Number(trainer_id) : null;
+    if (class_start_time !== undefined) studentUpdates.class_start_time = toTime24(class_start_time);
+    if (class_end_time !== undefined) studentUpdates.class_end_time = toTime24(class_end_time);
     if (phone !== undefined) studentUpdates.phone = phone.trim();
     if (address !== undefined) studentUpdates.address = address.trim();
     if (emergency_contact !== undefined) studentUpdates.emergency_contact = emergency_contact.trim();

@@ -94,11 +94,30 @@ async function runE2ETests() {
     assert(studentLogin.ok && studentLogin.data.user.role === 'student', 'Student John login successful and role verified');
     const studentToken = studentLogin.data.token;
 
+    // 2.0. Trainer dropdown + student-chosen class timing
+    const trainerOptions = await req('/trainers/options');
+    assert(trainerOptions.ok && trainerOptions.data.data.length > 0 && !trainerOptions.data.data[0].email, 'Public trainer dropdown lists trainers without private details');
+    const pickTrainerId = trainerOptions.data.data[0]?.id;
+
+    const noTrainerReg = await req('/auth/register', 'POST', { name: 'No Trainer', email: `no.trainer.${Date.now()}@portal.edu`, password: 'password123' });
+    assert(noTrainerReg.status === 400, 'Registration requires choosing a trainer and class timing');
+
+    const classUpdate = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '10:00', class_end_time: '12:00' }, studentToken);
+    assert(classUpdate.ok && classUpdate.data.data.class_timing === '10:00 AM - 12:00 PM', 'Student updates own trainer and class timing');
+    const badTiming = await req('/students/me/class', 'PUT', { trainer_id: pickTrainerId, class_start_time: '12:00', class_end_time: '10:00' }, studentToken);
+    assert(badTiming.status === 400, 'Class end time before start time is rejected');
+    // Put John back on Alex's class for the trainer checks below
+    const alexId = trainerLogin.data.profile?.id;
+    await req('/students/me/class', 'PUT', { trainer_id: alexId, class_start_time: '09:00', class_end_time: '12:00' }, studentToken);
+
     // 2.1. Student Self-Registration Admin Verification & Restrictive Access Workflow
     console.log('\n--- Testing Student Registration Admin Verification & Access Control ---');
     const testEmail = `new.applicant.${Date.now()}@portal.edu`;
     const regRes = await req('/auth/register', 'POST', {
       name: 'Applicant Alice',
+      trainer_id: pickTrainerId,
+      class_start_time: '14:00',
+      class_end_time: '16:00',
       email: testEmail,
       password: 'password123',
       phone: '555-0199'
@@ -129,6 +148,9 @@ async function runE2ETests() {
     const rejectEmail = `rejected.applicant.${Date.now()}@portal.edu`;
     const regRes2 = await req('/auth/register', 'POST', {
       name: 'Applicant Bob',
+      trainer_id: pickTrainerId,
+      class_start_time: '14:00',
+      class_end_time: '16:00',
       email: rejectEmail,
       password: 'password123',
       phone: '555-0188'
@@ -177,7 +199,7 @@ async function runE2ETests() {
 
     // Duplicate Check
     const duplicateRes = await req('/attendance/mark', 'POST', { session: testSession }, studentToken);
-    assert(duplicateRes.status === 400, 'Duplicate attendance prevention enforced (same student, batch, date, session)');
+    assert(duplicateRes.status === 400, 'Duplicate attendance prevention enforced (same student, date, session)');
 
     // Student Attendance History
     const myAtt = await req('/attendance/my', 'GET', null, studentToken);
@@ -236,6 +258,24 @@ async function runE2ETests() {
       admin_notes: 'Technician ticket verified.'
     }, adminToken);
     assert(updateComplaintRes.ok && updateComplaintRes.data.data?.status === 'Resolved', 'Admin updates complaint status to Resolved and posts response');
+
+    // 9.1 Forgot password -> admin resets it
+    console.log('\n--- Testing Admin Password Reset Workflow ---');
+    const forgotRes = await req('/auth/forgot-password', 'POST', { email: testEmail, note: 'Forgot it' });
+    assert(forgotRes.ok, 'Student can request a password reset from the login page');
+    const pwRequests = await req('/students/password-requests', 'GET', null, adminToken);
+    const pwRequest = pwRequests.data?.data?.find(r => r.email === testEmail);
+    assert(pwRequest && pwRequest.status === 'pending', 'Admin sees the pending password reset request');
+    const studentBlocked = await req('/students/password-requests', 'GET', null, studentToken);
+    assert(studentBlocked.status === 403, 'Students cannot read password reset requests');
+    if (pwRequest) {
+      const resetRes = await req(`/students/${pwRequest.student_id}/reset-password`, 'POST', { password: 'newpass456' }, adminToken);
+      assert(resetRes.ok, 'Admin sets a new password for the student');
+      const newLogin = await req('/auth/login', 'POST', { email: testEmail, password: 'newpass456' });
+      assert(newLogin.ok, 'Student signs in with the admin-set password');
+      const after = await req('/students/password-requests', 'GET', null, adminToken);
+      assert(!after.data.data.some(r => r.email === testEmail), 'Request is cleared after the reset');
+    }
 
     // 10. Real-Time Notifications
     console.log('\n--- Testing Real-Time Notifications ---');

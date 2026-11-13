@@ -23,7 +23,6 @@ export function AdminAttendance() {
   const toast = useToast();
   const [records, setRecords] = useState([]);
   const [courses, setCourses] = useState([]);
-  const [batches, setBatches] = useState([]);
   const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,16 +35,14 @@ export function AdminAttendance() {
   const fetchRecords = async () => {
     try {
       setLoading(true);
-      const [attRes, crsRes, batRes, trnRes] = await Promise.all([
+      const [attRes, crsRes, trnRes] = await Promise.all([
         api.getAdminAllAttendance(),
         api.getCourses(),
-        api.getBatches(),
         api.getTrainers()
       ]);
 
       if (attRes.success) setRecords(attRes.data || []);
       if (crsRes.success) setCourses(crsRes.data || []);
-      if (batRes.success) setBatches(batRes.data || []);
       if (trnRes.success) setTrainers(trnRes.data || []);
     } catch (err) {
       console.error(err);
@@ -106,12 +103,12 @@ export function AdminAttendance() {
       )
     },
     {
-      header: 'Batch & Program',
-      key: 'batch_name',
+      header: 'Class Time & Program',
+      key: 'class_timing',
       sortable: true,
       render: (r) => (
         <div>
-          <span className="font-semibold text-xs text-slate-800">{r.batch_name}</span>
+          <span className="font-semibold text-xs text-slate-800">{r.class_timing || '—'}</span>
           <div className="text-[10px] text-slate-400">{r.course_name}</div>
         </div>
       )
@@ -205,8 +202,8 @@ export function AdminAttendance() {
       <DataTable
         columns={columns}
         data={records}
-        searchPlaceholder="Search student, trainer, batch, or session..."
-        searchFields={['student_name', 'student_code', 'trainer_name', 'batch_name', 'course_name', 'date', 'session']}
+        searchPlaceholder="Search student, trainer, or session..."
+        searchFields={['student_name', 'student_code', 'trainer_name', 'class_timing', 'course_name', 'date', 'session']}
         filters={[
           {
             key: 'status',
@@ -290,8 +287,8 @@ export function AdminAttendance() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-slate-50">
-                <span className="text-slate-400 font-medium">Batch:</span>
-                <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedRecord.batch_name}</p>
+                <span className="text-slate-400 font-medium">Class Time:</span>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedRecord.class_timing || '—'}</p>
               </div>
               <div className="p-3 rounded-xl bg-slate-50">
                 <span className="text-slate-400 font-medium">Date & Time:</span>

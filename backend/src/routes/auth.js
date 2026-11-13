@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/database.js';
 import { generateToken, requireAuth } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { validateClassChoice } from './students.js';
 import {
   authLoginLimiter,
   checkAccountLockout,
@@ -44,7 +45,7 @@ function toSafeUser(user) {
 // POST /api/auth/register - Public student self-registration
 router.post('/register', authLoginLimiter, async (req, res) => {
   try {
-    const { name, email, password, phone, domain } = req.body;
+    const { name, email, password, phone, domain, trainer_id, class_start_time, class_end_time } = req.body;
     const cleanName = typeof name === 'string' ? name.trim() : '';
     const cleanEmail = db.normalizeEmail(email);
     const cleanDomain = typeof domain === 'string' ? domain.trim() : '';
@@ -69,6 +70,11 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       });
     }
 
+    const classChoice = validateClassChoice({ trainer_id, class_start_time, class_end_time });
+    if (classChoice.error) {
+      return res.status(400).json({ success: false, message: classChoice.error });
+    }
+
     const password_hash = await bcrypt.hash(password, 10);
     const user = db.insert('users', {
       name: cleanName,
@@ -85,8 +91,9 @@ router.post('/register', authLoginLimiter, async (req, res) => {
       student_id: createStudentCode(),
       domain: cleanDomain,
       course_id: null,
-      batch_id: null,
-      trainer_id: null,
+      trainer_id: classChoice.trainer.id,
+      class_start_time: classChoice.start,
+      class_end_time: classChoice.end,
       phone: user.phone,
       address: '',
       emergency_contact: ''
@@ -489,6 +496,60 @@ router.post('/change-credentials', authLoginLimiter, async (req, res) => {
       success: false,
       message: 'Failed to update credentials. Please try again.'
     });
+  }
+});
+
+// POST /api/auth/forgot-password - Student asks the admin to reset their password
+router.post('/forgot-password', authLoginLimiter, (req, res) => {
+  try {
+    const cleanEmail = db.normalizeEmail(req.body?.email);
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) : '';
+    if (!cleanEmail || !EMAIL_PATTERN.test(cleanEmail)) {
+      return res.status(400).json({ success: false, message: 'Please enter the email you registered with.' });
+    }
+
+    // Same reply whether or not the account exists, so emails cannot be probed
+    const reply = {
+      success: true,
+      message: 'Your request has been sent to the admin. They will set a new password and share it with you.'
+    };
+
+    const user = db.findUserByEmail(cleanEmail);
+    const student = user && user.role === 'student'
+      ? db.findOne('students', s => String(s.user_id) === String(user.id))
+      : null;
+    if (!student) return res.json(reply);
+
+    const alreadyPending = db.findOne('password_requests', r => String(r.student_id) === String(student.id) && r.status === 'pending');
+    if (alreadyPending) {
+      if (note) db.update('password_requests', alreadyPending.id, { note });
+      return res.json(reply);
+    }
+
+    db.insert('password_requests', {
+      student_id: student.id,
+      user_id: user.id,
+      email: user.email,
+      note,
+      status: 'pending'
+    });
+
+    db.find('users', u => u.role === 'admin').forEach(admin => {
+      db.insert('notifications', {
+        user_id: admin.id,
+        title: 'Password Reset Requested',
+        message: `${user.name} (${user.email}) forgot their password and needs a new one.${note ? ` Note: "${note}"` : ''}`,
+        type: 'password_request',
+        link: '/admin/students?tab=password',
+        is_read: false
+      });
+    });
+
+    logAudit(req, 'PASSWORD_RESET_REQUESTED', `Student requested a password reset: ${user.email}`, user);
+    return res.json(reply);
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ success: false, message: 'Could not send your request. Please try again.' });
   }
 });
 

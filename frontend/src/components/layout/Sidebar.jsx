@@ -49,7 +49,6 @@ export function Sidebar({ isOpen, onClose }) {
     { to: '/admin/students', label: 'Students', icon: GraduationCap },
     { to: '/admin/trainers', label: 'Trainers', icon: Users },
     { to: '/admin/courses', label: 'Courses', icon: BookOpen },
-    { to: '/admin/batches', label: 'Batches', icon: Layers },
     { to: '/admin/attendance', label: 'Attendance Oversight', icon: CalendarCheck },
     { to: '/admin/reports', label: 'Attendance Reports', icon: FileBarChart2 },
     { to: '/admin/complaints', label: 'Complaints Hub', icon: AlertOctagon },

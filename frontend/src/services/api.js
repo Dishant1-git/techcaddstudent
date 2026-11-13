@@ -52,6 +52,7 @@ export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   registerStudent: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   changeCredentials: (data) => request('/auth/change-credentials', { method: 'POST', body: JSON.stringify(data) }),
+  forgotPassword: (email, note) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email, note }) }),
   getMe: () => request('/auth/me'),
   updateProfile: (data) => request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
   updatePassword: (data) => request('/auth/password', { method: 'PUT', body: JSON.stringify(data) }),
@@ -63,6 +64,9 @@ export const api = {
     return request(`/students${query ? `?${query}` : ''}`);
   },
   getStudentMe: () => request('/students/me'),
+  updateMyClass: (data) => request('/students/me/class', { method: 'PUT', body: JSON.stringify(data) }),
+  getPasswordRequests: () => request('/students/password-requests'),
+  resetStudentPassword: (id, password) => request(`/students/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
   getStudent: (id) => request(`/students/${id}`),
   createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
   updateStudent: (id, data) => request(`/students/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -72,24 +76,19 @@ export const api = {
 
   // Trainers
   getTrainers: () => request('/trainers'),
+  getTrainerOptions: () => request('/trainers/options'),
   getTrainerMe: () => request('/trainers/me'),
   getTrainer: (id) => request(`/trainers/${id}`),
   createTrainer: (data) => request('/trainers', { method: 'POST', body: JSON.stringify(data) }),
   updateTrainer: (id, data) => request(`/trainers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTrainer: (id) => request(`/trainers/${id}`, { method: 'DELETE' }),
 
-  // Courses & Batches
+  // Courses
   getCourses: () => request('/courses'),
   getCourse: (id) => request(`/courses/${id}`),
   createCourse: (data) => request('/courses', { method: 'POST', body: JSON.stringify(data) }),
   updateCourse: (id, data) => request(`/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCourse: (id) => request(`/courses/${id}`, { method: 'DELETE' }),
-
-  getBatches: () => request('/batches'),
-  getBatch: (id) => request(`/batches/${id}`),
-  createBatch: (data) => request('/batches', { method: 'POST', body: JSON.stringify(data) }),
-  updateBatch: (id, data) => request(`/batches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteBatch: (id) => request(`/batches/${id}`, { method: 'DELETE' }),
 
   // Attendance
   markAttendance: (data) => request('/attendance/mark', { method: 'POST', body: JSON.stringify(data) }),

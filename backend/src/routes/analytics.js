@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../db/database.js';
+import { db, formatClassTiming } from '../db/database.js';
 import { requireAuth, requireAdmin, requireTrainer, requireStudent } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -16,7 +16,6 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
     const totalStudents = db.count('students');
     const totalTrainers = db.count('trainers');
     const activeCourses = db.count('courses', c => c.status === 'active');
-    const activeBatches = db.count('batches', b => b.status === 'active');
 
     const allAttendance = db.find('attendance');
     const todayAttendance = allAttendance.filter(a => a.date === todayStr);
@@ -90,16 +89,16 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
       }
     });
 
-    // Batch attendance distribution
-    const batchDistribution = db.find('batches').map(b => {
-      const batchAttendance = allAttendance.filter(a => String(a.batch_id) === String(b.id));
-      const bVerified = batchAttendance.filter(a => a.status === 'Verified').length;
-      const bTotal = batchAttendance.length;
+    // Attendance distribution per trainer
+    const trainerDistribution = db.find('trainers').map(t => {
+      const tAttendance = allAttendance.filter(a => String(a.trainer_id) === String(t.id));
+      const tVerified = tAttendance.filter(a => a.status === 'Verified').length;
+      const trainerUser = db.findById('users', t.user_id);
       return {
-        batch_name: b.batch_name,
-        total: bTotal,
-        verified: bVerified,
-        percentage: bTotal > 0 ? Math.round((bVerified / bTotal) * 100) : 100
+        trainer_name: trainerUser ? trainerUser.name : t.trainer_id,
+        total: tAttendance.length,
+        verified: tVerified,
+        percentage: tAttendance.length > 0 ? Math.round((tVerified / tAttendance.length) * 100) : 100
       };
     });
 
@@ -110,7 +109,6 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
           totalStudents,
           totalTrainers,
           activeCourses,
-          activeBatches,
           todayAttendance: todayAttendance.length,
           pendingAttendance: pendingVerification.length,
           pendingStudentRegistrations,
@@ -125,7 +123,7 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
         trainerActivity: allTrainers,
         attendanceTrends,
         categoryDistribution: Object.entries(categoryMap).map(([category, count]) => ({ category, count })),
-        batchDistribution
+        trainerDistribution
       }
     });
   } catch (err) {
@@ -145,11 +143,7 @@ router.get('/trainer', requireAuth, requireTrainer, (req, res) => {
     const todayStr = formatDate();
     const enriched = db.getEnrichedTrainer(trainer);
 
-    const batches = db.find('batches', b => String(b.trainer_id) === String(trainer.id));
-    const batchIds = batches.map(b => String(b.id));
-    const students = db.find('students', s => 
-      String(s.trainer_id) === String(trainer.id) || (s.batch_id && batchIds.includes(String(s.batch_id)))
-    );
+    const students = db.getTrainerStudents(trainer.id);
     const studentIds = students.map(s => String(s.id));
 
     const attendanceRecords = db.find('attendance', a => 
@@ -159,6 +153,19 @@ router.get('/trainer', requireAuth, requireTrainer, (req, res) => {
     const todayAttendance = attendanceRecords.filter(a => a.date === todayStr);
     const pendingVerifications = attendanceRecords.filter(a => a.status === 'Pending Verification');
     const verifiedAttendance = attendanceRecords.filter(a => a.status === 'Verified');
+
+    // Class time slots chosen by this trainer's students, earliest first
+    const slotMap = {};
+    students.forEach(s => {
+      const timing = formatClassTiming(s.class_start_time, s.class_end_time);
+      if (!timing) return;
+      const key = `${s.class_start_time}-${s.class_end_time}`;
+      if (!slotMap[key]) slotMap[key] = { start: s.class_start_time, end: s.class_end_time, class_timing: timing, student_count: 0, students: [] };
+      slotMap[key].student_count += 1;
+      const u = db.findById('users', s.user_id);
+      slotMap[key].students.push(u ? u.name : s.student_id);
+    });
+    const todayClasses = Object.values(slotMap).sort((a, b) => a.start.localeCompare(b.start));
     const rejectedAttendance = attendanceRecords.filter(a => a.status === 'Rejected');
 
     const totalAttendance = attendanceRecords.length;
@@ -171,17 +178,16 @@ router.get('/trainer', requireAuth, requireTrainer, (req, res) => {
       data: {
         profile: enriched,
         cards: {
-          assignedBatches: batches.length,
           assignedCourses: enriched.assigned_courses.length,
           assignedStudents: students.length,
-          todayClasses: batches.length,
+          todayClasses: todayClasses.length,
           todayAttendance: todayAttendance.length,
           pendingVerifications: pendingVerifications.length,
           verifiedTotal: verifiedAttendance.length,
           rejectedTotal: rejectedAttendance.length,
           attendancePercentage: trainerAttendancePercentage
         },
-        todayBatches: batches,
+        todayClasses,
         pendingRecords: pendingVerifications.slice(0, 5).map(a => db.getEnrichedAttendance(a))
       }
     });

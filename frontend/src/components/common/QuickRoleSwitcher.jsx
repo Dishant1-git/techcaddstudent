@@ -26,7 +26,7 @@ export function QuickRoleSwitcher() {
       icon: UserCheck,
       color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       badgeColor: 'bg-indigo-600',
-      desc: 'FSWD Lead, attendance verifications for Batch A'
+      desc: 'FSWD Lead, verifies attendance for their students'
     },
     {
       role: 'trainer',
@@ -36,7 +36,7 @@ export function QuickRoleSwitcher() {
       icon: UserCheck,
       color: 'bg-purple-50 text-purple-700 border-purple-200',
       badgeColor: 'bg-purple-600',
-      desc: 'Data Science Specialist, verifications for Batch B'
+      desc: 'Data Science Specialist, verifies attendance for their students'
     },
     {
       role: 'student',
@@ -56,7 +56,7 @@ export function QuickRoleSwitcher() {
       icon: GraduationCap,
       color: 'bg-sky-50 text-sky-700 border-sky-200',
       badgeColor: 'bg-sky-600',
-      desc: 'FSWD Student (Batch A), attendance & complaint status'
+      desc: 'FSWD Student, attendance & complaint status'
     }
   ];
 

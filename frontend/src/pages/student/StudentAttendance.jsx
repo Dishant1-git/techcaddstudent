@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarCheck,
   Clock,
@@ -35,7 +36,7 @@ export function StudentAttendance() {
 
   // Mark Modal
   const [showMarkModal, setShowMarkModal] = useState(false);
-  const [session, setSession] = useState('Morning Lecture');
+  const [session, setSession] = useState('Regular Class');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -102,7 +103,7 @@ export function StudentAttendance() {
       render: (r) => (
         <div>
           <span className="font-bold text-slate-800">{r.session}</span>
-          <div className="text-[11px] text-slate-400">{r.batch_name}</div>
+          <div className="text-[11px] text-slate-400">{r.class_timing}</div>
         </div>
       )
     },
@@ -150,7 +151,7 @@ export function StudentAttendance() {
             My Attendance Record
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Program: <strong>{profile?.course_name || 'Enrolled Course'}</strong> • Batch: <strong>{profile?.batch_name || 'Assigned Batch'}</strong>
+            Trainer: <strong>{profile?.trainer_id ? profile.trainer_name : 'Not selected'}</strong> • Class time: <strong>{profile?.class_timing || 'Not set'}</strong>
           </p>
         </div>
 
@@ -238,32 +239,46 @@ export function StudentAttendance() {
         isOpen={showMarkModal}
         onClose={() => setShowMarkModal(false)}
         title="Mark Class Attendance"
-        subtitle={`Session Date: ${new Date().toISOString().split('T')[0]} | Batch: ${profile?.batch_name || 'Assigned Batch'}`}
+        subtitle={`Date: ${new Date().toISOString().split('T')[0]}${profile?.class_timing ? ` | Class time: ${profile.class_timing}` : ''}`}
       >
+        {!profile?.trainer_id ? (
+          <div className="space-y-4 text-sm">
+            <p className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+              Before marking attendance, please choose your trainer and class timing.
+            </p>
+            <div className="flex justify-end">
+              <Link
+                to="/student/profile"
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
+              >
+                Set up my class
+              </Link>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleMarkAttendance} className="space-y-4">
           <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">
             <div className="font-bold flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              Attendance Approval Policy
+              How it works
             </div>
             <p className="text-indigo-700/90 leading-relaxed">
-              Your attendance status will be submitted as <strong>Pending Verification</strong>. Your assigned trainer (<strong>{profile?.trainer_name || 'Trainer'}</strong>) will review and verify your record.
+              Your trainer <strong>{profile?.trainer_name}</strong> will check and verify your attendance.
             </p>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Select Class / Session
+              Class type
             </label>
             <select
               value={session}
               onChange={(e) => setSession(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-800"
             >
-              <option value="Morning Lecture">Morning Lecture (09:00 AM - 12:00 PM)</option>
-              <option value="Afternoon Lab">Afternoon Practical Lab (01:30 PM - 04:30 PM)</option>
-              <option value="Evening Discussion">Evening Discussion (05:30 PM - 08:30 PM)</option>
-              <option value="Special Seminar">Special Seminar / Workshop</option>
+              <option value="Regular Class">Regular class{profile?.class_timing ? ` (${profile.class_timing})` : ''}</option>
+              <option value="Extra Class">Extra class</option>
+              <option value="Workshop">Workshop / Seminar</option>
             </select>
           </div>
 
@@ -297,6 +312,7 @@ export function StudentAttendance() {
             </button>
           </div>
         </form>
+        )}
       </Modal>
 
       {/* Record Details Modal */}
@@ -327,8 +343,8 @@ export function StudentAttendance() {
                 <p className="font-bold text-slate-800 mt-0.5">{selectedRecord.course_name}</p>
               </div>
               <div className="p-3 rounded-xl bg-slate-50">
-                <span className="text-slate-400 font-medium">Assigned Batch:</span>
-                <p className="font-bold text-slate-800 mt-0.5">{selectedRecord.batch_name}</p>
+                <span className="text-slate-400 font-medium">Class Timing:</span>
+                <p className="font-bold text-slate-800 mt-0.5">{selectedRecord.class_timing || '—'}</p>
               </div>
             </div>
 

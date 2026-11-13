@@ -25,7 +25,6 @@ import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminStudents } from './pages/admin/AdminStudents';
 import { AdminTrainers } from './pages/admin/AdminTrainers';
 import { AdminCourses } from './pages/admin/AdminCourses';
-import { AdminBatches } from './pages/admin/AdminBatches';
 import { AdminAttendance } from './pages/admin/AdminAttendance';
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminComplaints } from './pages/admin/AdminComplaints';
@@ -125,7 +124,6 @@ export function App() {
         <Route path="students" element={<AdminStudents />} />
         <Route path="trainers" element={<AdminTrainers />} />
         <Route path="courses" element={<AdminCourses />} />
-        <Route path="batches" element={<AdminBatches />} />
         <Route path="attendance" element={<AdminAttendance />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="complaints" element={<AdminComplaints />} />

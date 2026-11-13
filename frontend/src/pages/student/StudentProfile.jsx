@@ -4,7 +4,7 @@ import {
   Mail,
   Phone,
   BookOpen,
-  Layers,
+  Clock,
   UserCheck,
   Lock,
   CheckCircle2,
@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { api } from '../../services/api';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { ClassDetailsFields, validateClassDetails } from '../../components/common/ClassDetailsFields';
 
 export function StudentProfile() {
   const { user, profile, refreshProfile } = useAuth();
@@ -29,6 +30,34 @@ export function StudentProfile() {
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+
+  const [classDetails, setClassDetails] = useState({
+    trainer_id: profile?.trainer_id || '',
+    class_start_time: profile?.class_start_time || '',
+    class_end_time: profile?.class_end_time || ''
+  });
+  const [savingClass, setSavingClass] = useState(false);
+
+  const handleSaveClass = async (e) => {
+    e.preventDefault();
+    const classError = validateClassDetails(classDetails);
+    if (classError) {
+      toast.warning(classError);
+      return;
+    }
+    setSavingClass(true);
+    try {
+      const res = await api.updateMyClass(classDetails);
+      if (res.success) {
+        toast.success(res.message, 'Saved');
+        refreshProfile();
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to save class details.');
+    } finally {
+      setSavingClass(false);
+    }
+  };
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -164,9 +193,11 @@ export function StudentProfile() {
             <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-200">
               ID: {profile?.student_id || 'STU-PENDING'}
             </span>
-            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
-              {profile?.batch_name || 'Assigned Batch'}
-            </span>
+            {profile?.class_timing && (
+              <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" /> {profile.class_timing}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -188,52 +219,48 @@ export function StudentProfile() {
             )}
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
               <span className="font-semibold text-slate-600">Course Program:</span>
-              <span className="font-bold text-slate-900">{profile?.course_name || 'Full-Stack Web Development'}</span>
+              <span className="font-bold text-slate-900">{profile?.course_name || 'Not Enrolled'}</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-              <span className="font-semibold text-slate-600">Current Cohort:</span>
-              <span className="font-bold text-indigo-700">{profile?.batch_name || 'Batch FSWD-2026-A'}</span>
+              <span className="font-semibold text-slate-600">Trainer:</span>
+              <span className="font-bold text-indigo-700">{profile?.trainer_id ? profile.trainer_name : 'Not selected'}</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <span className="font-semibold text-slate-600">Class Timing:</span>
+              <span className="font-bold text-slate-900">{profile?.class_timing || 'Not set'}</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
               <span className="font-semibold text-slate-600">Student ID Code:</span>
-              <span className="font-mono font-bold text-slate-800">{profile?.student_id || 'STU-2026-001'}</span>
+              <span className="font-mono font-bold text-slate-800">{profile?.student_id || '—'}</span>
             </div>
           </div>
         </div>
 
-        {/* Assigned Trainer Card */}
+        {/* My Class: student picks trainer and timing */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
             <UserCheck className="w-4 h-4 text-indigo-600" />
-            Assigned Lead Trainer
+            My Class
           </h3>
-
-          <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-3 text-xs">
-            <div className="flex items-center gap-3">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile?.trainer_name || 'Trainer')}`}
-                alt="Trainer"
-                className="w-12 h-12 rounded-2xl bg-white shadow-sm object-cover ring-2 ring-indigo-200/50"
-              />
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm">{profile?.trainer_name || 'Alex Rivera'}</h4>
-                <span className="text-[11px] text-indigo-600 font-semibold block">Instructional Faculty & Lead</span>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-indigo-100/70 space-y-1.5 font-mono text-[11px] text-slate-600">
-              <div className="flex items-center justify-between">
-                <span>Trainer Email:</span>
-                <span className="text-slate-900 font-medium">{profile?.trainer_email || 'trainer.alex@portal.edu'}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Verification Authority:</span>
-                <span className="text-emerald-700 font-bold">Authorized for Attendance</span>
-              </div>
-            </div>
-          </div>
+          {!profile?.trainer_id && (
+            <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+              Choose your trainer and class timing so you can mark attendance.
+            </p>
+          )}
+          <form onSubmit={handleSaveClass} className="space-y-4">
+            <ClassDetailsFields value={classDetails} onChange={setClassDetails} disabled={savingClass} />
+            <button
+              type="submit"
+              disabled={savingClass}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {savingClass ? 'Saving...' : 'Save My Class'}
+            </button>
+          </form>
         </div>
       </div>
 

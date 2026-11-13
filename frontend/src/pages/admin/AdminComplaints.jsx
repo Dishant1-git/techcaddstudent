@@ -99,7 +99,7 @@ export function AdminComplaints() {
       render: (c) => (
         <div>
           <div className="font-bold text-slate-900">{c.student_name}</div>
-          <div className="text-[10px] text-slate-400 font-mono">{c.student_code} • {c.batch_name}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{c.student_code} • {c.trainer_name}</div>
         </div>
       )
     },
@@ -253,7 +253,7 @@ export function AdminComplaints() {
           isOpen={!!selectedComplaint}
           onClose={() => setSelectedComplaint(null)}
           title={`Manage Complaint #CMP-${selectedComplaint.id}`}
-          subtitle={`Submitted by: ${selectedComplaint.student_name} (${selectedComplaint.student_code}) • Batch: ${selectedComplaint.batch_name}`}
+          subtitle={`Submitted by: ${selectedComplaint.student_name} (${selectedComplaint.student_code}) • Trainer: ${selectedComplaint.trainer_name}`}
           maxWidth="max-w-3xl"
         >
           <form onSubmit={handleUpdateStatus} className="space-y-4 text-xs">

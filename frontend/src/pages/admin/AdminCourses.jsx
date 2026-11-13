@@ -137,16 +137,6 @@ export function AdminCourses() {
       render: (c) => <span className="font-medium text-xs text-slate-700">{c.duration}</span>
     },
     {
-      header: 'Active Batches',
-      key: 'batch_count',
-      sortable: true,
-      render: (c) => (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          {c.batch_count || 0} Batches
-        </span>
-      )
-    },
-    {
       header: 'Enrolled Students',
       key: 'student_count',
       sortable: true,

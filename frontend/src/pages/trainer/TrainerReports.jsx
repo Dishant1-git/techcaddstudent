@@ -72,10 +72,10 @@ export function TrainerReports() {
       )
     },
     {
-      header: 'Batch',
-      key: 'batch_name',
+      header: 'Class Time',
+      key: 'class_timing',
       sortable: true,
-      render: (r) => <span className="text-xs font-semibold text-slate-700">{r.batch_name}</span>
+      render: (r) => <span className="text-xs font-semibold text-slate-700">{r.class_timing || '—'}</span>
     },
     {
       header: 'Date',
@@ -203,44 +203,12 @@ export function TrainerReports() {
         </div>
       </div>
 
-      {/* Batch Breakdown Section */}
-      {reportData?.batchBreakdown?.length > 0 && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
-          <h3 className="font-bold text-sm text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-indigo-600" />
-            Batch Attendance Performance
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reportData.batchBreakdown.map((b) => (
-              <div key={b.batch_name} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-900">{b.batch_name}</span>
-                  <span className="font-bold text-xs text-indigo-600">{b.attendancePercentage}%</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-indigo-600 transition-all duration-500"
-                    style={{ width: `${b.attendancePercentage}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                  <span>Verified: {b.verified}</span>
-                  <span>Pending: {b.pending}</span>
-                  <span>Rejected: {b.rejected}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Filtered Attendance Records Table */}
       <DataTable
         columns={columns}
         data={reportData?.records || []}
         searchPlaceholder="Search student or session..."
-        searchFields={['student_name', 'student_code', 'session', 'batch_name', 'date']}
+        searchFields={['student_name', 'student_code', 'session', 'class_timing', 'date']}
         emptyMessage="No attendance records found."
       />
     </div>

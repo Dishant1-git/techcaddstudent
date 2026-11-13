@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../db/database.js';
+import { db, formatClassTiming } from '../db/database.js';
 import { requireAuth, requireStudent, requireTrainer, requireAdmin, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 
@@ -27,25 +27,27 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
     }
 
     const { session, date, notes } = req.body;
-    const sessionName = session ? session.trim() : 'Morning Lecture';
+    const sessionName = session && session.trim() ? session.trim() : 'Class';
     const targetDate = date ? date.trim() : formatDate();
 
-    // Determine batch and trainer
-    const batch = student.batch_id ? db.findById('batches', student.batch_id) : null;
-    const trainerId = student.trainer_id || (batch ? batch.trainer_id : null);
-    const courseId = student.course_id || (batch ? batch.course_id : null);
+    // The student picks their own trainer and class timing
+    const trainerId = student.trainer_id || null;
+    const courseId = student.course_id || null;
+    const trainer = trainerId ? db.findById('trainers', trainerId) : null;
 
-    if (!batch) {
+    if (!trainer) {
       return res.status(400).json({
         success: false,
-        message: 'You are not currently assigned to any active batch. Please contact the administrator.'
+        code: 'CLASS_NOT_SET',
+        message: 'Please choose your trainer and class timing in "My Profile" before marking attendance.'
       });
     }
 
-    // DUPLICATE CHECK: Prevent duplicate attendance for the same student, batch, date, and session
-    const duplicate = db.findOne('attendance', a => 
+    const classTiming = formatClassTiming(student.class_start_time, student.class_end_time);
+
+    // DUPLICATE CHECK: one record per student, date, and session
+    const duplicate = db.findOne('attendance', a =>
       String(a.student_id) === String(student.id) &&
-      String(a.batch_id) === String(batch.id) &&
       a.date === targetDate &&
       a.session.toLowerCase() === sessionName.toLowerCase()
     );
@@ -63,8 +65,8 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
     const newRecord = db.insert('attendance', {
       student_id: student.id,
       trainer_id: trainerId,
-      batch_id: batch.id,
       course_id: courseId,
+      class_timing: classTiming,
       date: targetDate,
       session: sessionName,
       check_in_time: checkInTime,
@@ -76,22 +78,16 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
       notes: notes ? notes.trim() : null
     });
 
-    // Notify assigned Trainer if trainer exists
-    if (trainerId) {
-      const trainer = db.findById('trainers', trainerId);
-      if (trainer) {
-        db.insert('notifications', {
-          user_id: trainer.user_id,
-          title: 'Attendance Verification Required',
-          message: `${req.user.name} marked attendance for '${sessionName}' in ${batch.batch_name} on ${targetDate}.`,
-          type: 'attendance_pending',
-          is_read: false,
-          link: '/trainer/verifications'
-        });
-      }
-    }
+    db.insert('notifications', {
+      user_id: trainer.user_id,
+      title: 'Attendance Verification Required',
+      message: `${req.user.name} marked attendance for '${sessionName}'${classTiming ? ` (${classTiming})` : ''} on ${targetDate}.`,
+      type: 'attendance_pending',
+      is_read: false,
+      link: '/trainer/verifications'
+    });
 
-    logAudit(req, 'ATTENDANCE_MARKED', `Student ${req.user.name} marked attendance for ${sessionName} on ${targetDate} (Batch: ${batch.batch_name})`);
+    logAudit(req, 'ATTENDANCE_MARKED', `Student ${req.user.name} marked attendance for ${sessionName} on ${targetDate}${classTiming ? ` (${classTiming})` : ''}`);
 
     const enriched = db.getEnrichedAttendance(newRecord);
     return res.status(201).json({
@@ -176,10 +172,7 @@ router.get('/trainer/pending', requireAuth, requireTrainer, (req, res) => {
       return res.status(404).json({ success: false, message: 'Trainer profile not found.' });
     }
 
-    const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
-    const assignedStudents = db.find('students', s => 
-      String(s.trainer_id) === String(trainer.id) || (s.batch_id && trainerBatches.includes(String(s.batch_id)))
-    ).map(s => String(s.id));
+    const assignedStudents = db.getTrainerStudents(trainer.id).map(s => String(s.id));
 
     // Filter attendance records where status is Pending Verification and student is assigned
     const pending = db.find('attendance', a => 
@@ -203,20 +196,14 @@ router.get('/trainer/all', requireAuth, requireTrainer, (req, res) => {
       return res.status(404).json({ success: false, message: 'Trainer profile not found.' });
     }
 
-    const { batch_id, date, status, search } = req.query;
+    const { date, status, search } = req.query;
 
-    const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
-    const assignedStudents = db.find('students', s => 
-      String(s.trainer_id) === String(trainer.id) || (s.batch_id && trainerBatches.includes(String(s.batch_id)))
-    ).map(s => String(s.id));
+    const assignedStudents = db.getTrainerStudents(trainer.id).map(s => String(s.id));
 
     let records = db.find('attendance', a => 
       String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id))
     );
 
-    if (batch_id) {
-      records = records.filter(a => String(a.batch_id) === String(batch_id));
-    }
     if (date) {
       records = records.filter(a => a.date === date);
     }
@@ -262,9 +249,8 @@ router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
         return res.status(403).json({ success: false, message: 'Trainer profile not found.' });
       }
 
-      const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
       const student = db.findById('students', record.student_id);
-      const isAssigned = (student && (String(student.trainer_id) === String(trainer.id) || (student.batch_id && trainerBatches.includes(String(student.batch_id))))) ||
+      const isAssigned = (student && String(student.trainer_id) === String(trainer.id)) ||
                          String(record.trainer_id) === String(trainer.id);
 
       if (!isAssigned) {
@@ -332,9 +318,8 @@ router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
         return res.status(403).json({ success: false, message: 'Trainer profile not found.' });
       }
 
-      const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
       const student = db.findById('students', record.student_id);
-      const isAssigned = (student && (String(student.trainer_id) === String(trainer.id) || (student.batch_id && trainerBatches.includes(String(student.batch_id))))) ||
+      const isAssigned = (student && String(student.trainer_id) === String(trainer.id)) ||
                          String(record.trainer_id) === String(trainer.id);
 
       if (!isAssigned) {
@@ -386,7 +371,7 @@ router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
 // GET /api/attendance/admin/all - Admin views all attendance records
 router.get('/admin/all', requireAuth, requireAdmin, (req, res) => {
   try {
-    const { student_id, trainer_id, course_id, batch_id, date_from, date_to, status, search } = req.query;
+    const { student_id, trainer_id, course_id, date_from, date_to, status, search } = req.query;
 
     let records = db.find('attendance');
 
@@ -395,9 +380,6 @@ router.get('/admin/all', requireAuth, requireAdmin, (req, res) => {
     }
     if (trainer_id) {
       records = records.filter(a => String(a.trainer_id) === String(trainer_id));
-    }
-    if (batch_id) {
-      records = records.filter(a => String(a.batch_id) === String(batch_id));
     }
     if (course_id) {
       records = records.filter(a => String(a.course_id) === String(course_id));
@@ -420,7 +402,7 @@ router.get('/admin/all', requireAuth, requireAdmin, (req, res) => {
         a.student_name.toLowerCase().includes(q) ||
         (a.student_code && a.student_code.toLowerCase().includes(q)) ||
         (a.trainer_name && a.trainer_name.toLowerCase().includes(q)) ||
-        (a.batch_name && a.batch_name.toLowerCase().includes(q))
+        (a.class_timing && a.class_timing.toLowerCase().includes(q))
       );
     }
 
@@ -436,7 +418,7 @@ router.get('/admin/all', requireAuth, requireAdmin, (req, res) => {
 // GET /api/attendance/reports - Comprehensive Reports Endpoint for Admin & Trainers
 router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
   try {
-    const { student_id, trainer_id, course_id, batch_id, date_from, date_to, status } = req.query;
+    const { student_id, trainer_id, course_id, date_from, date_to, status } = req.query;
 
     let records = db.find('attendance');
 
@@ -445,10 +427,7 @@ router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
       const trainer = db.findOne('trainers', t => String(t.user_id) === String(req.user.id));
       if (!trainer) return res.json({ success: true, data: { records: [], summary: {}, chartData: [] } });
 
-      const trainerBatches = db.find('batches', b => String(b.trainer_id) === String(trainer.id)).map(b => String(b.id));
-      const assignedStudents = db.find('students', s => 
-        String(s.trainer_id) === String(trainer.id) || (s.batch_id && trainerBatches.includes(String(s.batch_id)))
-      ).map(s => String(s.id));
+      const assignedStudents = db.getTrainerStudents(trainer.id).map(s => String(s.id));
 
       records = records.filter(a => 
         String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id))
@@ -458,7 +437,6 @@ router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
     }
 
     if (student_id) records = records.filter(a => String(a.student_id) === String(student_id));
-    if (batch_id) records = records.filter(a => String(a.batch_id) === String(batch_id));
     if (course_id) records = records.filter(a => String(a.course_id) === String(course_id));
     if (date_from) records = records.filter(a => a.date >= date_from);
     if (date_to) records = records.filter(a => a.date <= date_to);
@@ -486,21 +464,21 @@ router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
     });
     const trends = Object.values(dateMap).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Batch Breakdown
-    const batchMap = {};
+    // Trainer Breakdown
+    const trainerMap = {};
     enriched.forEach(r => {
-      const bName = r.batch_name || 'Unassigned';
-      if (!batchMap[bName]) {
-        batchMap[bName] = { batch_name: bName, total: 0, verified: 0, rejected: 0, pending: 0 };
+      const tName = r.trainer_name || 'Unassigned';
+      if (!trainerMap[tName]) {
+        trainerMap[tName] = { trainer_name: tName, total: 0, verified: 0, rejected: 0, pending: 0 };
       }
-      batchMap[bName].total += 1;
-      if (r.status === 'Verified') batchMap[bName].verified += 1;
-      else if (r.status === 'Rejected') batchMap[bName].rejected += 1;
-      else if (r.status === 'Pending Verification') batchMap[bName].pending += 1;
+      trainerMap[tName].total += 1;
+      if (r.status === 'Verified') trainerMap[tName].verified += 1;
+      else if (r.status === 'Rejected') trainerMap[tName].rejected += 1;
+      else if (r.status === 'Pending Verification') trainerMap[tName].pending += 1;
     });
-    const batchBreakdown = Object.values(batchMap).map(b => ({
-      ...b,
-      attendancePercentage: b.total > 0 ? Math.round((b.verified / b.total) * 100) : 100
+    const trainerBreakdown = Object.values(trainerMap).map(t => ({
+      ...t,
+      attendancePercentage: t.total > 0 ? Math.round((t.verified / t.total) * 100) : 100
     }));
 
     return res.json({
@@ -513,7 +491,7 @@ router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
         overallPercentage: percentage
       },
       trends,
-      batchBreakdown,
+      trainerBreakdown,
       records: enriched
     });
   } catch (err) {

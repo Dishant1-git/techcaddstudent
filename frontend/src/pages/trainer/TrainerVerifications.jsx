@@ -110,10 +110,10 @@ export function TrainerVerifications() {
       render: (r) => <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">{r.student_code}</span>
     },
     {
-      header: 'Batch',
-      key: 'batch_name',
+      header: 'Class Time',
+      key: 'class_timing',
       sortable: true,
-      render: (r) => <span className="font-semibold text-slate-700 text-xs">{r.batch_name}</span>
+      render: (r) => <span className="font-semibold text-slate-700 text-xs">{r.class_timing || '—'}</span>
     },
     {
       header: 'Date',
@@ -249,7 +249,7 @@ export function TrainerVerifications() {
         columns={columns}
         data={records}
         searchPlaceholder="Search student name, ID, or session..."
-        searchFields={['student_name', 'student_code', 'student_email', 'session', 'batch_name', 'date']}
+        searchFields={['student_name', 'student_code', 'student_email', 'session', 'class_timing', 'date']}
         filters={[
           {
             key: 'status',
@@ -344,8 +344,8 @@ export function TrainerVerifications() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-slate-50">
-                <span className="text-slate-400 font-medium">Batch:</span>
-                <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedRecord.batch_name}</p>
+                <span className="text-slate-400 font-medium">Class Time:</span>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedRecord.class_timing || '—'}</p>
               </div>
               <div className="p-3 rounded-xl bg-slate-50">
                 <span className="text-slate-400 font-medium">Date & Time:</span>

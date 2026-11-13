@@ -89,10 +89,10 @@ export function TrainerStudents() {
       )
     },
     {
-      header: 'Assigned Batch',
-      key: 'batch_name',
+      header: 'Class Time',
+      key: 'class_timing',
       sortable: true,
-      render: (s) => <span className="font-semibold text-xs text-slate-700">{s.batch_name}</span>
+      render: (s) => <span className="font-semibold text-xs text-slate-700">{s.class_timing || 'Not set'}</span>
     },
     {
       header: 'Contact Phone',
@@ -154,7 +154,7 @@ export function TrainerStudents() {
             My Assigned Students
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Directory of enrolled students across your assigned course batches.
+            Students who selected you as their trainer.
           </p>
         </div>
       </div>
@@ -162,8 +162,8 @@ export function TrainerStudents() {
       <DataTable
         columns={columns}
         data={students}
-        searchPlaceholder="Search student name, ID, or batch..."
-        searchFields={['name', 'student_id', 'email', 'batch_name', 'phone']}
+        searchPlaceholder="Search student name, ID, or class time..."
+        searchFields={['name', 'student_id', 'email', 'class_timing', 'phone']}
         filters={[
           {
             key: 'status',
@@ -186,7 +186,7 @@ export function TrainerStudents() {
             setStudentDetails(null);
           }}
           title={`Student: ${selectedStudent.name}`}
-          subtitle={`Student ID: ${selectedStudent.student_id} • Batch: ${selectedStudent.batch_name}`}
+          subtitle={`Student ID: ${selectedStudent.student_id} • Class: ${selectedStudent.class_timing || 'Not set'}`}
           maxWidth="max-w-3xl"
         >
           <div className="space-y-4 text-xs">

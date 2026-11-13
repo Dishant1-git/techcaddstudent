@@ -18,6 +18,24 @@ router.get('/', requireAuth, (req, res) => {
   }
 });
 
+// GET /api/trainers/options - Public list for the student trainer dropdown
+router.get('/options', (req, res) => {
+  try {
+    const options = db.find('trainers')
+      .map(t => {
+        const user = db.findById('users', t.user_id);
+        if (!user || user.status !== 'active') return null;
+        return { id: t.id, name: user.name, specialization: t.specialization || '' };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return res.json({ success: true, count: options.length, data: options });
+  } catch (err) {
+    console.error('Fetch trainer options error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load trainers.' });
+  }
+});
+
 // GET /api/trainers/me - Trainer self profile
 router.get('/me', requireAuth, requireTrainer, (req, res) => {
   try {
@@ -28,14 +46,7 @@ router.get('/me', requireAuth, requireTrainer, (req, res) => {
 
     const enriched = db.getEnrichedTrainer(trainer);
 
-    // Get today's classes / batches
-    const batches = db.find('batches', b => String(b.trainer_id) === String(trainer.id));
-    const batchIds = batches.map(b => String(b.id));
-
-    // Get assigned students
-    const students = db.find('students', s => 
-      String(s.trainer_id) === String(trainer.id) || (s.batch_id && batchIds.includes(String(s.batch_id)))
-    ).map(s => db.getEnrichedStudent(s));
+    const students = db.getTrainerStudents(trainer.id).map(s => db.getEnrichedStudent(s));
 
     return res.json({
       success: true,
@@ -62,11 +73,7 @@ router.get('/:id', requireAuth, (req, res) => {
 
     // If Admin, include detailed assigned students and activity
     if (req.user.role === 'admin') {
-      const batches = db.find('batches', b => String(b.trainer_id) === String(trainer.id));
-      const batchIds = batches.map(b => String(b.id));
-      const students = db.find('students', s => 
-        String(s.trainer_id) === String(trainer.id) || (s.batch_id && batchIds.includes(String(s.batch_id)))
-      ).map(s => db.getEnrichedStudent(s));
+      const students = db.getTrainerStudents(trainer.id).map(s => db.getEnrichedStudent(s));
 
       const verifications = db.find('attendance', a => 
         String(a.verified_by) === String(trainer.id)

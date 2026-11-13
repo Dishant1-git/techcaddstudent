@@ -14,13 +14,47 @@ const defaultSchema = {
   students: [],
   trainers: [],
   courses: [],
-  batches: [],
   attendance: [],
   complaints: [],
   notifications: [],
   messages: [],
   audit_logs: [],
+  password_requests: [],
 };
+
+// "09:00 AM" / "9:00 am" / "09:00" -> "09:00" (24h), or '' if unparseable
+export function toTime24(value) {
+  if (typeof value !== 'string') return '';
+  const m = value.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/);
+  if (!m) return '';
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  if (min > 59 || h > 23) return '';
+  if (m[3]) {
+    if (h < 1 || h > 12) return '';
+    const pm = m[3].toLowerCase() === 'pm';
+    if (h === 12) h = pm ? 12 : 0;
+    else if (pm) h += 12;
+  }
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+// "13:30" -> "01:30 PM"
+export function toTime12(value) {
+  const t = toTime24(value);
+  if (!t) return '';
+  let [h, m] = t.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+export function formatClassTiming(start, end) {
+  const s = toTime12(start);
+  const e = toTime12(end);
+  if (s && e) return `${s} - ${e}`;
+  return s || '';
+}
 
 const COLLECTIONS = Object.keys(defaultSchema);
 
@@ -58,7 +92,37 @@ class Database {
     for (const name of COLLECTIONS) {
       await this.mongo.collection(name).createIndex({ id: 1 }, { unique: true });
     }
+    await this.migrateBatchesToStudentTimings();
     this.isLoaded = true;
+  }
+
+  // One-time migration from the old batch system: copy each batch's trainer and
+  // schedule onto its students, then drop the batch link and the batches collection.
+  async migrateBatchesToStudentTimings() {
+    const legacyBatches = await this.mongo.collection('batches').find({}).toArray();
+    const batchById = new Map(legacyBatches.map(b => [String(b.id), b]));
+    for (const student of this.data.students) {
+      if (student.batch_id === undefined) continue;
+      const batch = batchById.get(String(student.batch_id));
+      const updates = {};
+      if (batch) {
+        if (!student.trainer_id && batch.trainer_id) updates.trainer_id = batch.trainer_id;
+        if (!student.course_id && batch.course_id) updates.course_id = batch.course_id;
+        if (!student.class_start_time && batch.schedule_time) {
+          const [start = '', end = ''] = String(batch.schedule_time).replace(/\(.*\)/, '').split('-');
+          updates.class_start_time = toTime24(start);
+          updates.class_end_time = toTime24(end);
+        }
+      }
+      const { batch_id, ...rest } = { ...student, ...updates };
+      const index = this.data.students.indexOf(student);
+      this.data.students[index] = rest;
+      await this.mongo.collection('students').replaceOne({ id: student.id }, { ...rest });
+    }
+    if (legacyBatches.length > 0) {
+      await this.mongo.collection('batches').drop().catch(() => {});
+      console.log(`[MongoDB] Migrated ${legacyBatches.length} batch(es) into per-student class timings`);
+    }
   }
 
   async importLegacyData() {
@@ -68,6 +132,10 @@ class Database {
       if (docs.length === 0) continue;
       await this.mongo.collection(name).insertMany(docs.map(doc => ({ ...doc })));
       this.data[name] = docs;
+    }
+    // Old batches are imported only so migrateBatchesToStudentTimings() can fold them into students
+    if (Array.isArray(legacy.batches) && legacy.batches.length > 0) {
+      await this.mongo.collection('batches').insertMany(legacy.batches.map(doc => ({ ...doc })));
     }
     console.log('[MongoDB] Imported existing data from data.json');
   }
@@ -247,6 +315,11 @@ class Database {
     );
   }
 
+  // Students who picked this trainer
+  getTrainerStudents(trainerId) {
+    return this.find('students', s => String(s.trainer_id) === String(trainerId));
+  }
+
   // Relational Hydration Helpers
   getEnrichedAttendance(attendanceRecord) {
     if (!attendanceRecord) return null;
@@ -254,8 +327,7 @@ class Database {
     const user = student ? this.findById('users', student.user_id) : null;
     const trainer = attendanceRecord.trainer_id ? this.findById('trainers', attendanceRecord.trainer_id) : null;
     const trainerUser = trainer ? this.findById('users', trainer.user_id) : null;
-    const batch = attendanceRecord.batch_id ? this.findById('batches', attendanceRecord.batch_id) : null;
-    const course = batch ? this.findById('courses', batch.course_id) : (attendanceRecord.course_id ? this.findById('courses', attendanceRecord.course_id) : null);
+    const course = attendanceRecord.course_id ? this.findById('courses', attendanceRecord.course_id) : null;
 
     return {
       ...attendanceRecord,
@@ -264,8 +336,7 @@ class Database {
       student_code: student ? student.student_id : 'N/A',
       course_id: course ? course.id : null,
       course_name: course ? course.course_name : 'General Program',
-      batch_id: batch ? batch.id : attendanceRecord.batch_id,
-      batch_name: batch ? batch.batch_name : 'General Batch',
+      class_timing: attendanceRecord.class_timing || (student ? formatClassTiming(student.class_start_time, student.class_end_time) : ''),
       trainer_name: trainerUser ? trainerUser.name : (attendanceRecord.verified_by_name || 'Unassigned'),
       trainer_code: trainer ? trainer.trainer_id : 'N/A'
     };
@@ -275,7 +346,6 @@ class Database {
     if (!student) return null;
     const user = this.findById('users', student.user_id);
     const course = student.course_id ? this.findById('courses', student.course_id) : null;
-    const batch = student.batch_id ? this.findById('batches', student.batch_id) : null;
     const trainer = student.trainer_id ? this.findById('trainers', student.trainer_id) : null;
     const trainerUser = trainer ? this.findById('users', trainer.user_id) : null;
 
@@ -296,8 +366,9 @@ class Database {
       avatar: user ? user.avatar : null,
       domain: student.domain || (course ? course.course_name : '') || '',
       course_name: course ? course.course_name : 'Not Enrolled',
-      batch_name: batch ? batch.batch_name : 'Not Assigned',
-      trainer_name: trainerUser ? trainerUser.name : 'Not Assigned',
+      class_timing: formatClassTiming(student.class_start_time, student.class_end_time),
+      trainer_name: trainerUser ? trainerUser.name : 'Not Selected',
+      trainer_specialization: trainer ? trainer.specialization : '',
       trainer_email: trainerUser ? trainerUser.email : '',
       stats: {
         totalClasses: totalAttendance,
@@ -312,12 +383,10 @@ class Database {
   getEnrichedTrainer(trainer) {
     if (!trainer) return null;
     const user = this.findById('users', trainer.user_id);
-    const batches = this.find('batches', b => String(b.trainer_id) === String(trainer.id));
-    const batchIds = batches.map(b => String(b.id));
-    const students = this.find('students', s => String(s.trainer_id) === String(trainer.id) || (s.batch_id && batchIds.includes(String(s.batch_id))));
-    
-    // Assigned courses
-    const courseIds = [...new Set(batches.map(b => b.course_id).filter(Boolean))];
+    const students = this.getTrainerStudents(trainer.id);
+
+    // Courses of the students who picked this trainer
+    const courseIds = [...new Set(students.map(s => s.course_id).filter(Boolean))];
     const courses = courseIds.map(cId => this.findById('courses', cId)).filter(Boolean);
 
     // Pending verifications count
@@ -334,7 +403,6 @@ class Database {
       phone: trainer.phone || (user ? user.phone : ''),
       status: user ? user.status : 'active',
       avatar: user ? user.avatar : null,
-      assigned_batches: batches,
       assigned_courses: courses,
       assigned_students_count: students.length,
       pending_verifications_count: pendingVerifications
@@ -345,14 +413,16 @@ class Database {
     if (!complaint) return null;
     const student = this.findById('students', complaint.student_id);
     const user = student ? this.findById('users', student.user_id) : null;
-    const batch = student && student.batch_id ? this.findById('batches', student.batch_id) : null;
+    const trainer = student && student.trainer_id ? this.findById('trainers', student.trainer_id) : null;
+    const trainerUser = trainer ? this.findById('users', trainer.user_id) : null;
 
     return {
       ...complaint,
       student_name: user ? user.name : 'Unknown Student',
       student_code: student ? student.student_id : 'N/A',
       student_email: user ? user.email : '',
-      batch_name: batch ? batch.batch_name : 'N/A'
+      trainer_name: trainerUser ? trainerUser.name : 'N/A',
+      class_timing: student ? formatClassTiming(student.class_start_time, student.class_end_time) : ''
     };
   }
 }

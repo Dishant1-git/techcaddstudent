@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { ClassDetailsFields, validateClassDetails } from '../../components/common/ClassDetailsFields';
 
 export function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [domain, setDomain] = useState('');
+  const [classDetails, setClassDetails] = useState({ trainer_id: '', class_start_time: '', class_end_time: '' });
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -49,9 +51,15 @@ export function Register() {
       return;
     }
 
+    const classError = validateClassDetails(classDetails);
+    if (classError) {
+      toast.warning(classError);
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await registerStudent({ name, email, phone, domain, password });
+      const res = await registerStudent({ name, email, phone, domain, password, ...classDetails });
       if (res && res.pendingApproval) {
         setSubmittedPending(true);
       }
@@ -211,6 +219,12 @@ export function Register() {
                   <option value="Industrial Automation / PLC" />
                 </datalist>
               </Field>
+
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+                <p className="text-xs font-bold text-indigo-900">Your class</p>
+                <ClassDetailsFields value={classDetails} onChange={setClassDetails} />
+                <p className="text-[11px] text-slate-500">You can change these later from your profile.</p>
+              </div>
 
               <Field label="Password" icon={Lock}>
                 <input

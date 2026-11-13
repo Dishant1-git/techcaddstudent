@@ -39,6 +39,13 @@ export function Login() {
   const [changeError, setChangeError] = useState(null);
   const [changeSuccess, setChangeSuccess] = useState(null);
 
+  // Forgot password (student asks admin for a new password)
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotNote, setForgotNote] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(null);
+
   const { login } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -60,6 +67,30 @@ export function Login() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenForgot = () => {
+    setForgotEmail(email.trim());
+    setForgotNote('');
+    setForgotSent(null);
+    setShowForgot(true);
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.warning('Please enter the email you registered with.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await api.forgotPassword(forgotEmail.trim(), forgotNote.trim());
+      setForgotSent(res.message);
+    } catch (err) {
+      toast.error(err.message || 'Could not send your request.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -264,11 +295,11 @@ export function Login() {
                   </label>
                   <button
                     type="button"
-                    onClick={handleOpenChangeModal}
+                    onClick={handleOpenForgot}
                     className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer hover:underline"
                   >
                     <KeyRound className="w-3 h-3" />
-                    Change Email / Pass
+                    Forgot password?
                   </button>
                 </div>
                 <div className="relative">
@@ -313,7 +344,7 @@ export function Login() {
             <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs text-slate-700 font-medium">Need to update admin login details?</span>
+                <span className="text-xs text-slate-700 font-medium">Admin: update your login details</span>
               </div>
               <button
                 type="button"
@@ -344,6 +375,63 @@ export function Login() {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Forgot your password?</h3>
+              <button type="button" onClick={() => setShowForgot(false)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {forgotSent ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">{forgotSent}</div>
+                <button type="button" onClick={() => setShowForgot(false)} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm cursor-pointer">
+                  OK
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit} className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Enter your email and we will ask the admin to set a new password for you. The admin will share it with you.
+                </p>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Email address
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="mt-1.5 w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm normal-case tracking-normal font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Message for admin (optional)
+                  <textarea
+                    rows="2"
+                    maxLength="300"
+                    value={forgotNote}
+                    onChange={(e) => setForgotNote(e.target.value)}
+                    placeholder="e.g. Please call me on my phone number"
+                    className="mt-1.5 w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm normal-case tracking-normal font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {forgotLoading ? 'Sending...' : 'Send request to admin'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Change Email & Password Modal */}
       {showChangeModal && (

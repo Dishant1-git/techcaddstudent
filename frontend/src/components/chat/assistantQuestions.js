@@ -51,11 +51,11 @@ export const QUESTION_GROUPS = [
   },
   {
     id: 'admission',
-    label: 'Admission & batches',
+    label: 'Admission & timings',
     questions: [
       'How do I take admission in a course?',
       'Can I book a free demo class?',
-      'Are weekday, evening and weekend batches available?',
+      'Are weekday, evening and weekend class timings available?',
       'Who is eligible to join the courses?',
       'How are course fees decided?',
       'What is the refund policy?',

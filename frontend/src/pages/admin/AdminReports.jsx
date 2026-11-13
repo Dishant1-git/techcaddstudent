@@ -43,7 +43,6 @@ export function AdminReports() {
   const toast = useToast();
   const [reportData, setReportData] = useState(null);
   const [courses, setCourses] = useState([]);
-  const [batches, setBatches] = useState([]);
   const [trainers, setTrainers] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,21 +51,18 @@ export function AdminReports() {
   const [studentId, setStudentId] = useState('');
   const [trainerId, setTrainerId] = useState('');
   const [courseId, setCourseId] = useState('');
-  const [batchId, setBatchId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   const fetchFilters = async () => {
     try {
-      const [crsRes, batRes, trnRes, stuRes] = await Promise.all([
+      const [crsRes, trnRes, stuRes] = await Promise.all([
         api.getCourses(),
-        api.getBatches(),
         api.getTrainers(),
         api.getStudents()
       ]);
       if (crsRes.success) setCourses(crsRes.data || []);
-      if (batRes.success) setBatches(batRes.data || []);
       if (trnRes.success) setTrainers(trnRes.data || []);
       if (stuRes.success) setStudents(stuRes.data || []);
     } catch (err) {
@@ -81,7 +77,6 @@ export function AdminReports() {
       if (studentId) params.student_id = studentId;
       if (trainerId) params.trainer_id = trainerId;
       if (courseId) params.course_id = courseId;
-      if (batchId) params.batch_id = batchId;
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
       if (statusFilter) params.status = statusFilter;
@@ -104,13 +99,12 @@ export function AdminReports() {
 
   useEffect(() => {
     fetchReport();
-  }, [studentId, trainerId, courseId, batchId, dateFrom, dateTo, statusFilter]);
+  }, [studentId, trainerId, courseId, dateFrom, dateTo, statusFilter]);
 
   const resetFilters = () => {
     setStudentId('');
     setTrainerId('');
     setCourseId('');
-    setBatchId('');
     setDateFrom('');
     setDateTo('');
     setStatusFilter('');
@@ -137,12 +131,12 @@ export function AdminReports() {
       )
     },
     {
-      header: 'Program & Batch',
-      key: 'batch_name',
+      header: 'Program & Class Time',
+      key: 'class_timing',
       sortable: true,
       render: (r) => (
         <div>
-          <div className="font-semibold text-xs text-slate-800">{r.batch_name}</div>
+          <div className="font-semibold text-xs text-slate-800">{r.class_timing || '—'}</div>
           <div className="text-[10px] text-slate-400">{r.course_name}</div>
         </div>
       )
@@ -192,7 +186,7 @@ export function AdminReports() {
             Institutional Attendance Reports
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Build custom filters across courses, batches, faculty, and export certified records in CSV, Excel, or PDF.
+            Build custom filters across courses, trainers, and export certified records in CSV, Excel, or PDF.
           </p>
         </div>
 
@@ -234,20 +228,6 @@ export function AdminReports() {
               <option value="">All Courses</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>{c.course_name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Batch Cohort</label>
-            <select
-              value={batchId}
-              onChange={(e) => setBatchId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white"
-            >
-              <option value="">All Batches</option>
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>{b.batch_name}</option>
               ))}
             </select>
           </div>
@@ -344,18 +324,18 @@ export function AdminReports() {
 
       {/* Analytics Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Batch Attendance Comparison Bar Chart (6 cols) */}
+        {/* Trainer Attendance Comparison Bar Chart (6 cols) */}
         <div className="lg:col-span-6 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
           <h3 className="font-bold text-sm text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-indigo-600" />
-            Batch-Wise Attendance Compliance
+            Trainer-Wise Attendance
           </h3>
 
           <div className="h-60">
-            {reportData?.batchBreakdown?.length > 0 ? (
+            {reportData?.trainerBreakdown?.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={reportData.batchBreakdown}>
-                  <XAxis dataKey="batch_name" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                <BarChart data={reportData.trainerBreakdown}>
+                  <XAxis dataKey="trainer_name" stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
@@ -366,7 +346,7 @@ export function AdminReports() {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                No batch distribution data.
+                No trainer distribution data.
               </div>
             )}
           </div>
@@ -406,7 +386,7 @@ export function AdminReports() {
         columns={columns}
         data={reportData?.records || []}
         searchPlaceholder="Search student, trainer, or session..."
-        searchFields={['student_name', 'student_code', 'trainer_name', 'batch_name', 'course_name', 'date', 'session']}
+        searchFields={['student_name', 'student_code', 'trainer_name', 'class_timing', 'course_name', 'date', 'session']}
         emptyMessage="No attendance records matched the filter criteria."
       />
     </div>

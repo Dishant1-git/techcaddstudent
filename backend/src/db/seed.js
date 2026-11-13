@@ -18,7 +18,7 @@ export async function seedDatabase() {
   db.data.students = [];
   db.data.trainers = [];
   db.data.courses = [];
-  db.data.batches = [];
+  db.data.password_requests = [];
   db.data.attendance = [];
   db.data.complaints = [];
   db.data.notifications = [];
@@ -190,57 +190,13 @@ export async function seedDatabase() {
     bio: 'Certified CISSP and AWS Solutions Architect with real-world threat hunting background.'
   });
 
-  // 4. Batches
-  const b1 = db.insert('batches', {
-    batch_name: 'Batch FSWD-2026-A',
-    course_id: c1.id,
-    trainer_id: t1.id,
-    schedule_time: '09:00 AM - 12:00 PM (Mon-Fri)',
-    start_date: '2026-01-15',
-    end_date: '2026-07-15',
-    status: 'active',
-    max_students: 30
-  });
-
-  const b2 = db.insert('batches', {
-    batch_name: 'Batch DSAI-2026-B',
-    course_id: c2.id,
-    trainer_id: t2.id,
-    schedule_time: '01:30 PM - 04:30 PM (Mon-Fri)',
-    start_date: '2026-02-01',
-    end_date: '2026-08-01',
-    status: 'active',
-    max_students: 25
-  });
-
-  const b3 = db.insert('batches', {
-    batch_name: 'Batch CYBER-2026-C',
-    course_id: c3.id,
-    trainer_id: t3.id,
-    schedule_time: '05:30 PM - 08:30 PM (Mon-Thu)',
-    start_date: '2026-03-01',
-    end_date: '2026-07-01',
-    status: 'active',
-    max_students: 20
-  });
-
-  const b4 = db.insert('batches', {
-    batch_name: 'Batch UIUX-2026-D',
-    course_id: c4.id,
-    trainer_id: t1.id,
-    schedule_time: '10:00 AM - 02:00 PM (Sat-Sun)',
-    start_date: '2026-02-15',
-    end_date: '2026-05-15',
-    status: 'active',
-    max_students: 20
-  });
-
   // 5. Students
   const s1 = db.insert('students', {
     user_id: uStudent1.id,
     student_id: 'STU-2026-001',
     course_id: c1.id,
-    batch_id: b1.id,
+    class_start_time: '09:00',
+    class_end_time: '12:00',
     trainer_id: t1.id,
     phone: uStudent1.phone,
     address: '742 Evergreen Terrace, Suite 101',
@@ -251,7 +207,8 @@ export async function seedDatabase() {
     user_id: uStudent2.id,
     student_id: 'STU-2026-002',
     course_id: c1.id,
-    batch_id: b1.id,
+    class_start_time: '09:00',
+    class_end_time: '12:00',
     trainer_id: t1.id,
     phone: uStudent2.phone,
     address: '124 Conch Street, Apt 4B',
@@ -262,7 +219,8 @@ export async function seedDatabase() {
     user_id: uStudent3.id,
     student_id: 'STU-2026-003',
     course_id: c2.id,
-    batch_id: b2.id,
+    class_start_time: '13:30',
+    class_end_time: '16:30',
     trainer_id: t2.id,
     phone: uStudent3.phone,
     address: '42 Wallaby Way, Sydney Bldg 3',
@@ -273,7 +231,8 @@ export async function seedDatabase() {
     user_id: uStudent4.id,
     student_id: 'STU-2026-004',
     course_id: c2.id,
-    batch_id: b2.id,
+    class_start_time: '13:30',
+    class_end_time: '16:30',
     trainer_id: t2.id,
     phone: uStudent4.phone,
     address: '350 Fifth Avenue, 21st Floor',
@@ -284,7 +243,8 @@ export async function seedDatabase() {
     user_id: uStudent5.id,
     student_id: 'STU-2026-005',
     course_id: c3.id,
-    batch_id: b3.id,
+    class_start_time: '17:30',
+    class_end_time: '20:30',
     trainer_id: t3.id,
     phone: uStudent5.phone,
     address: '221B Baker Street',
@@ -295,7 +255,8 @@ export async function seedDatabase() {
     user_id: uStudent6.id,
     student_id: 'STU-2026-006',
     course_id: c1.id,
-    batch_id: b1.id,
+    class_start_time: '09:00',
+    class_end_time: '12:00',
     trainer_id: t1.id,
     phone: uStudent6.phone,
     address: '10 Downing Court',
@@ -308,12 +269,12 @@ export async function seedDatabase() {
 
   const sessions = ['Morning Lecture', 'Afternoon Lab'];
   const studentsList = [
-    { student: s1, trainer: t1, batch: b1 },
-    { student: s2, trainer: t1, batch: b1 },
-    { student: s3, trainer: t2, batch: b2 },
-    { student: s4, trainer: t2, batch: b2 },
-    { student: s5, trainer: t3, batch: b3 },
-    { student: s6, trainer: t1, batch: b1 }
+    { student: s1, trainer: t1 },
+    { student: s2, trainer: t1 },
+    { student: s3, trainer: t2 },
+    { student: s4, trainer: t2 },
+    { student: s5, trainer: t3 },
+    { student: s6, trainer: t1 }
   ];
 
   for (let i = 12; i >= 1; i--) {
@@ -330,8 +291,7 @@ export async function seedDatabase() {
         db.insert('attendance', {
           student_id: item.student.id,
           trainer_id: item.trainer.id,
-          batch_id: item.batch.id,
-          course_id: item.batch.course_id,
+          course_id: item.student.course_id,
           date: dateStr,
           session: 'Morning Lecture',
           check_in_time: '09:04 AM',
@@ -346,8 +306,7 @@ export async function seedDatabase() {
         db.insert('attendance', {
           student_id: item.student.id,
           trainer_id: item.trainer.id,
-          batch_id: item.batch.id,
-          course_id: item.batch.course_id,
+          course_id: item.student.course_id,
           date: dateStr,
           session: 'Morning Lecture',
           check_in_time: '10:45 AM',
@@ -368,7 +327,6 @@ export async function seedDatabase() {
   db.insert('attendance', {
     student_id: s1.id,
     trainer_id: t1.id,
-    batch_id: b1.id,
     course_id: c1.id,
     date: todayStr,
     session: 'Morning Lecture',
@@ -384,7 +342,6 @@ export async function seedDatabase() {
   db.insert('attendance', {
     student_id: s2.id,
     trainer_id: t1.id,
-    batch_id: b1.id,
     course_id: c1.id,
     date: todayStr,
     session: 'Morning Lecture',
@@ -400,7 +357,6 @@ export async function seedDatabase() {
   db.insert('attendance', {
     student_id: s3.id,
     trainer_id: t2.id,
-    batch_id: b2.id,
     course_id: c2.id,
     date: todayStr,
     session: 'Afternoon Lab',
@@ -450,7 +406,7 @@ export async function seedDatabase() {
     priority: 'High',
     status: 'Open',
     admin_response: null,
-    admin_notes: 'Check LDAP sync for DSAI-2026-B batch permissions.',
+    admin_notes: 'Check LDAP sync for DSAI student permissions.',
     created_at: '2026-08-26T16:45:00.000Z',
     updated_at: '2026-08-26T16:45:00.000Z'
   });
@@ -491,7 +447,7 @@ export async function seedDatabase() {
   db.insert('notifications', {
     user_id: uTrainer1.id,
     title: 'Pending Attendance Verifications',
-    message: '2 students have marked attendance for Batch FSWD-2026-A requiring your verification.',
+    message: '2 students have marked attendance for your class requiring your verification.',
     type: 'attendance_pending',
     is_read: false,
     link: '/trainer/verifications'
@@ -512,7 +468,7 @@ export async function seedDatabase() {
     user_name: 'Harinder Singh',
     user_role: 'admin',
     action: 'SYSTEM_INITIALIZED',
-    details: 'Institute portal initialized with base courses, trainers, and batches.',
+    details: 'Institute portal initialized with base courses and trainers.',
     ip_address: '127.0.0.1'
   });
 
@@ -521,7 +477,7 @@ export async function seedDatabase() {
     user_name: 'John Doe',
     user_role: 'student',
     action: 'ATTENDANCE_MARKED',
-    details: `Marked attendance for Batch FSWD-2026-A (Morning Lecture) on ${todayStr}. Status: Pending Verification.`,
+    details: `Marked attendance for Morning Lecture (09:00 AM - 12:00 PM) on ${todayStr}. Status: Pending Verification.`,
     ip_address: '192.168.1.45'
   });
 
@@ -530,7 +486,7 @@ export async function seedDatabase() {
     user_name: 'Emily Watson',
     user_role: 'student',
     action: 'ATTENDANCE_MARKED',
-    details: `Marked attendance for Batch FSWD-2026-A (Morning Lecture) on ${todayStr}. Status: Pending Verification.`,
+    details: `Marked attendance for Morning Lecture (09:00 AM - 12:00 PM) on ${todayStr}. Status: Pending Verification.`,
     ip_address: '192.168.1.48'
   });
 

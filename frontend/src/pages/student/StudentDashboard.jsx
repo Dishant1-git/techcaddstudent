@@ -151,19 +151,19 @@ export function StudentDashboard() {
             <div className="mt-5 space-y-3 pt-4 border-t border-slate-100 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Program / Course</span>
-                <span className="font-semibold text-slate-800 text-right">{student?.course_name || 'Enrolled Course'}</span>
+                <span className="font-semibold text-slate-800 text-right">{student?.course_name || 'Not Enrolled'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 font-medium">Assigned Batch</span>
-                <span className="font-semibold text-slate-800">{student?.batch_name || 'Assigned Batch'}</span>
+                <span className="text-slate-400 font-medium">Class Timing</span>
+                <span className="font-semibold text-slate-800">{student?.class_timing || 'Not set'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 font-medium">Assigned Trainer</span>
-                <span className="font-bold text-indigo-700">{student?.trainer_name || 'Assigned Trainer'}</span>
+                <span className="text-slate-400 font-medium">My Trainer</span>
+                <span className="font-bold text-indigo-700">{student?.trainer_id ? student.trainer_name : 'Not selected'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Trainer Contact</span>
-                <span className="font-mono text-slate-600">{student?.trainer_email || 'trainer@portal.edu'}</span>
+                <span className="font-mono text-slate-600">{student?.trainer_email || '—'}</span>
               </div>
             </div>
           </div>
@@ -190,7 +190,7 @@ export function StudentDashboard() {
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>Check-In: <strong className="text-slate-700">{rec.check_in_time}</strong></span>
-                      <span>Batch: <strong className="text-slate-700">{rec.batch_name}</strong></span>
+                      {rec.class_timing && <span>Class: <strong className="text-slate-700">{rec.class_timing}</strong></span>}
                     </div>
 
                     {rec.status === 'Pending Verification' && (

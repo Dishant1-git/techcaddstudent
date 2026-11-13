@@ -22,12 +22,13 @@ export function ExportReports({
         return;
       }
 
-      const headers = ['Student ID', 'Student Name', 'Course', 'Batch', 'Date', 'Session', 'Check-In Time', 'Status', 'Verified By', 'Rejection Reason'];
+      const headers = ['Student ID', 'Student Name', 'Course', 'Trainer', 'Class Time', 'Date', 'Session', 'Check-In Time', 'Status', 'Verified By', 'Rejection Reason'];
       const rows = records.map(r => [
         r.student_code || 'N/A',
         `"${r.student_name || ''}"`,
         `"${r.course_name || ''}"`,
-        `"${r.batch_name || ''}"`,
+        `"${r.trainer_name || ''}"`,
+        `"${r.class_timing || ''}"`,
         r.date || '',
         `"${r.session || ''}"`,
         r.check_in_time || '',
@@ -66,7 +67,8 @@ export function ExportReports({
         'Student Name': r.student_name || '',
         'Email': r.student_email || '',
         'Course': r.course_name || '',
-        'Batch': r.batch_name || '',
+        'Trainer': r.trainer_name || '',
+        'Class Time': r.class_timing || '',
         'Date': r.date || '',
         'Session': r.session || '',
         'Check-In Time': r.check_in_time || '',
@@ -120,7 +122,7 @@ export function ExportReports({
       const tableRows = records.map(r => [
         r.student_code || 'N/A',
         r.student_name || '',
-        r.batch_name || '',
+        r.class_timing || '',
         r.date || '',
         r.session || '',
         r.check_in_time || '',
@@ -130,7 +132,7 @@ export function ExportReports({
 
       doc.autoTable({
         startY: summary ? 42 : 35,
-        head: [['ID', 'Student Name', 'Batch', 'Date', 'Session', 'Check-In', 'Status', 'Verified By']],
+        head: [['ID', 'Student Name', 'Class Time', 'Date', 'Session', 'Check-In', 'Status', 'Verified By']],
         body: tableRows,
         theme: 'striped',
         headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },

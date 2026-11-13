@@ -67,7 +67,6 @@ export function AdminDashboard() {
     totalStudents: 0,
     totalTrainers: 0,
     activeCourses: 0,
-    activeBatches: 0,
     todayAttendance: 0,
     pendingAttendance: 0,
     totalComplaints: 0,
@@ -161,11 +160,11 @@ export function AdminDashboard() {
           description="Instructors & faculty"
         />
         <StatCard
-          title="Active Batches"
-          value={cards.activeBatches}
+          title="Active Courses"
+          value={cards.activeCourses}
           icon={Layers}
           accent="purple"
-          description={`Across ${cards.activeCourses} active courses`}
+          description="Courses currently running"
         />
         <StatCard
           title="Today's Attendance"
@@ -331,7 +330,7 @@ export function AdminDashboard() {
                 <thead>
                   <tr className="text-slate-400 font-semibold border-b border-slate-100 pb-2">
                     <th className="py-2.5 px-3">Student</th>
-                    <th className="py-2.5 px-3">Batch</th>
+                    <th className="py-2.5 px-3">Trainer</th>
                     <th className="py-2.5 px-3">Attendance %</th>
                     <th className="py-2.5 px-3 text-right">Action</th>
                   </tr>
@@ -344,7 +343,7 @@ export function AdminDashboard() {
                         <div className="text-[10px] text-slate-400 font-mono">{s.student_id}</div>
                       </td>
                       <td className="py-3 px-3 text-slate-700 font-medium">
-                        {s.batch_name}
+                        {s.trainer_name}
                       </td>
                       <td className="py-3 px-3 font-bold text-rose-600">
                         {s.stats?.attendancePercentage}%

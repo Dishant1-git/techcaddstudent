@@ -9,7 +9,8 @@ import {
   Mail,
   Phone,
   BookOpen,
-  Layers,
+  KeyRound,
+  RefreshCw,
   UserCheck,
   CheckCircle2,
   XCircle,
@@ -30,13 +31,22 @@ export function AdminStudents() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
-  const [batches, setBatches] = useState([]);
+  const [passwordRequests, setPasswordRequests] = useState([]);
   const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Status Tab Filter
   const urlStatus = searchParams.get('status') || searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(urlStatus === 'pending_approval' || urlStatus === 'pending' ? 'pending_approval' : 'all');
+  const [activeTab, setActiveTab] = useState(
+    urlStatus === 'pending_approval' || urlStatus === 'pending' ? 'pending_approval'
+      : urlStatus === 'password' ? 'password' : 'all'
+  );
+
+  // Admin password reset
+  const [resettingStudent, setResettingStudent] = useState(null);
+  const [newStudentPassword, setNewStudentPassword] = useState('');
+  const [resetDone, setResetDone] = useState(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Approve / Reject State
   const [rejectingStudent, setRejectingStudent] = useState(null);
@@ -52,8 +62,9 @@ export function AdminStudents() {
     password: '',
     student_id: '',
     course_id: '',
-    batch_id: '',
     trainer_id: '',
+    class_start_time: '',
+    class_end_time: '',
     phone: '',
     address: '',
     emergency_contact: '',
@@ -107,16 +118,16 @@ export function AdminStudents() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [stuRes, crsRes, batRes, trnRes] = await Promise.all([
+      const [stuRes, crsRes, trnRes, pwRes] = await Promise.all([
         api.getStudents(),
         api.getCourses(),
-        api.getBatches(),
-        api.getTrainers()
+        api.getTrainers(),
+        api.getPasswordRequests()
       ]);
 
       if (stuRes.success) setStudents(stuRes.data || []);
       if (crsRes.success) setCourses(crsRes.data || []);
-      if (batRes.success) setBatches(batRes.data || []);
+      if (pwRes.success) setPasswordRequests(pwRes.data || []);
       if (trnRes.success) setTrainers(trnRes.data || []);
     } catch (err) {
       console.error(err);
@@ -139,8 +150,9 @@ export function AdminStudents() {
       student_id: `STU-${new Date().getFullYear()}-${String(students.length + 1).padStart(3, '0')}`,
       domain: '',
       course_id: courses[0]?.id || '',
-      batch_id: batches[0]?.id || '',
-      trainer_id: trainers[0]?.id || '',
+      trainer_id: '',
+      class_start_time: '',
+      class_end_time: '',
       phone: '',
       address: '',
       emergency_contact: '',
@@ -159,8 +171,9 @@ export function AdminStudents() {
       student_id: student.student_id || '',
       domain: student.domain || '',
       course_id: student.course_id || '',
-      batch_id: student.batch_id || '',
       trainer_id: student.trainer_id || '',
+      class_start_time: student.class_start_time || '',
+      class_end_time: student.class_end_time || '',
       phone: student.phone || '',
       address: student.address || '',
       emergency_contact: student.emergency_contact || '',
@@ -193,6 +206,41 @@ export function AdminStudents() {
       toast.error(err.message || 'Operation failed.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const generatePassword = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let out = '';
+    for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  };
+
+  const openResetModal = (student) => {
+    setResettingStudent(student);
+    setNewStudentPassword(generatePassword());
+    setResetDone(null);
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resettingStudent) return;
+    if (newStudentPassword.trim().length < 6) {
+      toast.warning('Password must be at least 6 characters.');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const res = await api.resetStudentPassword(resettingStudent.id, newStudentPassword.trim());
+      if (res.success) {
+        toast.success(res.message, 'Password Updated');
+        setResetDone(newStudentPassword.trim());
+        setPasswordRequests(prev => prev.filter(r => String(r.student_id) !== String(resettingStudent.id)));
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to reset password.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -255,12 +303,12 @@ export function AdminStudents() {
       )
     },
     {
-      header: 'Course & Batch',
-      key: 'batch_name',
+      header: 'Course & Class Time',
+      key: 'class_timing',
       sortable: true,
       render: (s) => (
         <div>
-          <span className="font-semibold text-xs text-slate-800">{s.batch_name}</span>
+          <span className="font-semibold text-xs text-slate-800">{s.class_timing || 'Timing not set'}</span>
           <div className="text-[10px] text-slate-400">{s.course_name}</div>
           {s.domain && (
             <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -271,10 +319,10 @@ export function AdminStudents() {
       )
     },
     {
-      header: 'Assigned Trainer',
+      header: 'Trainer',
       key: 'trainer_name',
       sortable: true,
-      render: (s) => <span className="font-medium text-xs text-indigo-700">{s.trainer_name || 'Unassigned'}</span>
+      render: (s) => <span className="font-medium text-xs text-indigo-700">{s.trainer_name || 'Not Selected'}</span>
     },
     {
       header: 'Attendance %',
@@ -338,6 +386,13 @@ export function AdminStudents() {
             title="View Full Profile & Records"
           >
             <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => openResetModal(s)}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            title="Change Password"
+          >
+            <KeyRound className="w-4 h-4" />
           </button>
           <button
             onClick={() => openEditModal(s)}
@@ -429,6 +484,25 @@ export function AdminStudents() {
         </button>
 
         <button
+          onClick={() => setActiveTab('password')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+            activeTab === 'password'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-indigo-800 hover:bg-indigo-50'
+          }`}
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          Password Requests
+          {passwordRequests.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'password' ? 'bg-white text-indigo-800' : 'bg-indigo-200 text-indigo-900 animate-pulse'
+            }`}>
+              {passwordRequests.length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('active')}
           className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
             activeTab === 'active'
@@ -457,12 +531,34 @@ export function AdminStudents() {
         </button>
       </div>
 
-      {/* Students Data Table */}
+      {activeTab === 'password' ? (
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm divide-y divide-slate-100">
+          {passwordRequests.length === 0 ? (
+            <p className="p-8 text-center text-sm text-slate-500">No password requests right now.</p>
+          ) : passwordRequests.map(r => (
+            <div key={r.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-bold text-slate-900">{r.student_name} <span className="font-mono text-xs text-indigo-700">({r.student_code})</span></div>
+                <div className="text-xs text-slate-500 font-mono">{r.student_email}</div>
+                {r.note && <div className="mt-1 text-xs text-slate-700">"{r.note}"</div>}
+                <div className="mt-1 text-[11px] text-slate-400">Requested {new Date(r.created_at).toLocaleString()}</div>
+              </div>
+              <button
+                onClick={() => openResetModal({ id: r.student_id, name: r.student_name, email: r.student_email })}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4" /> Set New Password
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+      /* Students Data Table */
       <DataTable
         columns={columns}
         data={filteredStudents}
-        searchPlaceholder="Search student name, ID, domain, email, or batch..."
-        searchFields={['name', 'student_id', 'email', 'domain', 'batch_name', 'course_name', 'phone']}
+        searchPlaceholder="Search student name, ID, email, or trainer..."
+        searchFields={['name', 'student_id', 'email', 'domain', 'trainer_name', 'course_name', 'phone']}
         filters={[
           {
             key: 'status',
@@ -477,13 +573,68 @@ export function AdminStudents() {
         ]}
         emptyMessage="No students found."
       />
+      )}
+
+      {/* Admin Change Password Modal */}
+      <Modal
+        isOpen={!!resettingStudent}
+        onClose={() => setResettingStudent(null)}
+        title={`Change Password: ${resettingStudent?.name || ''}`}
+        subtitle={resettingStudent?.email}
+      >
+        {resetDone ? (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-700">The password has been changed. Share this new password with the student:</p>
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 font-mono text-lg font-bold text-emerald-900 text-center select-all">
+              {resetDone}
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => setResettingStudent(null)} className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm cursor-pointer">
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              New password
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  type="text"
+                  required
+                  minLength="6"
+                  value={newStudentPassword}
+                  onChange={(e) => setNewStudentPassword(e.target.value)}
+                  className="flex-1 min-w-0 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono normal-case tracking-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setNewStudentPassword(generatePassword())}
+                  className="px-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  title="Generate a new password"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </label>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button type="button" onClick={() => setResettingStudent(null)} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={resetLoading} className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm disabled:opacity-50 cursor-pointer">
+                {resetLoading ? 'Saving...' : 'Change Password'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Add / Edit Student Modal */}
       <Modal
         isOpen={showFormModal}
         onClose={() => setShowFormModal(false)}
         title={editingStudent ? `Edit Student: ${editingStudent.name}` : 'Register New Student'}
-        subtitle={editingStudent ? `ID: ${editingStudent.student_id}` : 'Creates student credentials and assigns curriculum cohorts'}
+        subtitle={editingStudent ? `ID: ${editingStudent.student_id}` : 'Creates the student login and class details'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -562,7 +713,7 @@ export function AdminStudents() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                   Course Program
@@ -583,38 +734,45 @@ export function AdminStudents() {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Assigned Batch
-              </label>
-              <select
-                value={formData.batch_id}
-                onChange={(e) => setFormData({ ...formData, batch_id: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-800"
-              >
-                <option value="">-- Select Batch --</option>
-                {batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.batch_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Assigned Trainer
+                Trainer
               </label>
               <select
                 value={formData.trainer_id}
                 onChange={(e) => setFormData({ ...formData, trainer_id: e.target.value })}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-800"
               >
-                <option value="">-- Auto from Batch --</option>
+                <option value="">-- Not selected --</option>
                 {trainers.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.trainer_id})
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Class Starts
+              </label>
+              <input
+                type="time"
+                value={formData.class_start_time}
+                onChange={(e) => setFormData({ ...formData, class_start_time: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Class Ends
+              </label>
+              <input
+                type="time"
+                value={formData.class_end_time}
+                onChange={(e) => setFormData({ ...formData, class_end_time: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
             </div>
           </div>
 

@@ -10,11 +10,9 @@ router.get('/', requireAuth, (req, res) => {
   try {
     const courses = db.find('courses');
     const enriched = courses.map(c => {
-      const batches = db.find('batches', b => String(b.course_id) === String(c.id));
       const students = db.find('students', s => String(s.course_id) === String(c.id));
       return {
         ...c,
-        batch_count: batches.length,
         student_count: students.length
       };
     });
@@ -32,14 +30,12 @@ router.get('/:id', requireAuth, (req, res) => {
     if (!course) {
       return res.status(404).json({ success: false, message: 'Course not found.' });
     }
-    const batches = db.find('batches', b => String(b.course_id) === String(course.id));
     const students = db.find('students', s => String(s.course_id) === String(course.id)).map(s => db.getEnrichedStudent(s));
 
     return res.json({
       success: true,
       data: {
         ...course,
-        batches,
         students
       }
     });
