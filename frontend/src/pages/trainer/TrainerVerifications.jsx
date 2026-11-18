@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Calendar,
   Layers,
-  Filter
+  Filter,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -90,6 +91,18 @@ export function TrainerVerifications() {
     }
   };
 
+  const handleSheetSync = async (record) => {
+    try {
+      const res = await api.syncAttendanceSheet(record.id);
+      if (res.success) {
+        toast.success(`Sheet updated for ${record.student_name}.`, 'Attendance Synced');
+        fetchRecords();
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to sync attendance to the sheet.');
+    }
+  };
+
   const pendingCount = records.filter(r => r.status === 'Pending Verification').length;
   const verifiedCount = records.filter(r => r.status === 'Verified').length;
   const rejectedCount = records.filter(r => r.status === 'Rejected').length;
@@ -162,6 +175,16 @@ export function TrainerVerifications() {
                 <X className="w-3.5 h-3.5" /> Reject
               </button>
             </>
+          )}
+
+          {['Verified', 'Rejected'].includes(r.status) && (
+            <button
+              onClick={() => handleSheetSync(r)}
+              className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold text-[10px] flex items-center gap-1"
+              title="Retry Google Sheets sync"
+            >
+              <RefreshCw className="w-3 h-3" /> Sync Sheet
+            </button>
           )}
 
           <button

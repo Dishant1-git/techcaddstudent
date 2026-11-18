@@ -405,6 +405,36 @@ router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, async (req, res) 
   }
 });
 
+// POST /api/attendance/sync-sheet/:id - Retry a verified/rejected record's sheet sync
+router.post('/sync-sheet/:id', requireAuth, requireTrainerOrAdmin, async (req, res) => {
+  try {
+    const record = db.findById('attendance', req.params.id);
+    if (!record) return res.status(404).json({ success: false, message: 'Attendance record not found.' });
+    if (!['Verified', 'Rejected'].includes(record.status)) {
+      return res.status(400).json({ success: false, message: 'Only verified or rejected attendance can be synced to the sheet.' });
+    }
+
+    const student = db.findById('students', record.student_id);
+    if (!student) return res.status(404).json({ success: false, message: 'Student profile not found.' });
+
+    if (req.user.role === 'trainer') {
+      const trainer = db.findOne('trainers', item => String(item.user_id) === String(req.user.id));
+      if (!trainer) return res.status(403).json({ success: false, message: 'Trainer profile not found.' });
+      const isAssigned = String(student.trainer_id) === String(trainer.id) || String(record.trainer_id) === String(trainer.id);
+      if (!isAssigned) return res.status(403).json({ success: false, message: 'You can only sync attendance for students assigned to you.' });
+    }
+
+    const trainer = db.findById('trainers', record.trainer_id || student.trainer_id);
+    const trainerUser = trainer ? db.findById('users', trainer.user_id) : null;
+    const result = await syncAttendanceToSheet(record, db.getEnrichedStudent(student), trainerUser, record.status);
+    logAudit(req, 'ATTENDANCE_SHEET_SYNCED', `Attendance ID ${record.id} synced to Google Sheets with status ${record.status}`);
+    return res.json({ success: true, message: 'Attendance synced to Google Sheets.', sheetSync: { status: 'synced', ...result } });
+  } catch (error) {
+    console.error('[Attendance Sheet] Retry sync failed:', error.message);
+    return res.status(502).json({ success: false, message: error.message || 'Failed to sync attendance to Google Sheets.' });
+  }
+});
+
 // -------------------------------------------------------------
 // ADMIN ATTENDANCE MANAGEMENT & REPORTS
 // -------------------------------------------------------------

@@ -49,7 +49,7 @@ async function sheetsRequest(path, options = {}) {
 }
 
 function normalize(value) {
-  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return String(value ?? '').trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ');
 }
 
 function columnLetter(index) {
@@ -105,22 +105,51 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   const exactTrainerRows = trainerCol >= 0 && trainerName
     ? studentRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName))
     : studentRows;
-  // The roster uses shortened trainer labels (for example, "Harinder"), while
-  // portal accounts may store full names ("Harinder Singh"). Use that direct
-  // match when available; otherwise a unique student row is still unambiguous.
-  const matchingRows = exactTrainerRows.length ? exactTrainerRows : studentRows;
-  if (matchingRows.length !== 1) {
-    throw new Error(matchingRows.length
-      ? `Found multiple sheet rows for student ${student.student_code || student.name}; add a unique student identifier or align the Trainer labels`
-      : `No existing sheet row found for student ${student.student_code || student.name}`);
+  // The roster can shorten trainer names ("Harinder" / "Harinder Singh").
+  const trainerAliasRows = trainerCol >= 0 && trainerName
+    ? studentRows.filter(({ row }) => {
+        const label = normalize(row[trainerCol]);
+        const fullName = normalize(trainerName);
+        return label && (fullName.startsWith(`${label} `) || label.startsWith(`${fullName} `) || fullName.split(' ')[0].startsWith(label.split(' ')[0]));
+      })
+    : studentRows;
+  const matchingRows = exactTrainerRows.length ? exactTrainerRows : trainerAliasRows;
+  if (matchingRows.length > 1) {
+    throw new Error(`Found multiple sheet rows for student ${student.student_code || student.name}; add a unique student identifier or align the Trainer labels`);
   }
-  const studentRowIndex = matchingRows[0].index;
 
   const dateColumns = rows[headerRowIndex].map((cell, index) => ({ index, value: normalize(cell) }))
     .filter(item => dateVariants(record.date).has(item.value));
   const dateColumn = dateColumns.length ? dateColumns[dateColumns.length - 1].index : -1;
   if (dateColumn < 0) throw new Error(`No date column for ${record.date} was found in the sheet header`);
 
+  if (!matchingRows.length) {
+    if (studentRows.length) {
+      throw new Error(`Student ${student.name} exists in the sheet under a different trainer label; correct the Trainer cell before syncing`);
+    }
+    if (nameCol < 0 || trainerCol < 0) {
+      throw new Error(`No row found for ${student.name}; the sheet needs Student Name and Trainer columns to add the student`);
+    }
+    const appendedRow = Array(dateColumn + 1).fill('');
+    if (headers[1] === 'dept' || headers[1] === 'department') appendedRow[1] = student.domain || student.course_name || '';
+    appendedRow[trainerCol] = trainerName;
+    appendedRow[nameCol] = student.name;
+    appendedRow[dateColumn] = value;
+    const appendRange = encodeURIComponent(`'${title}'!A:ZZ`);
+    const appended = await sheetsRequest(`/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+      method: 'POST',
+      body: JSON.stringify({ majorDimension: 'ROWS', values: [appendedRow] }),
+    });
+    return {
+      sheet: sheet.properties.title,
+      cell: appended.updates?.updatedRange || 'appended row',
+      value,
+      trainer: trainerName,
+      studentAdded: true,
+    };
+  }
+
+  const studentRowIndex = matchingRows[0].index;
   const cell = `${columnLetter(dateColumn)}${studentRowIndex + 1}`;
   await sheetsRequest(`/values/${encodeURIComponent(`'${title}'!${cell}`)}?valueInputOption=USER_ENTERED`, {
     method: 'PUT',

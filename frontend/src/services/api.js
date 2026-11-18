@@ -105,6 +105,7 @@ export const api = {
   },
   verifyAttendance: (id) => request(`/attendance/verify/${id}`, { method: 'POST' }),
   rejectAttendance: (id, reason) => request(`/attendance/reject/${id}`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  syncAttendanceSheet: (id) => request(`/attendance/sync-sheet/${id}`, { method: 'POST' }),
   getAdminAllAttendance: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(`/attendance/admin/all${query ? `?${query}` : ''}`);
