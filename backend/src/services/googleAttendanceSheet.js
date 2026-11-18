@@ -93,18 +93,26 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   if (!keyColumns.length) throw new Error('Sheet needs a Student ID/Code, Email, or Student Name column');
 
   const trainerName = trainer?.name || '';
-  const matchingRows = rows.map((row, index) => ({ row, index })).filter(({ row, index }) => {
+  const studentRows = rows.map((row, index) => ({ row, index })).filter(({ row, index }) => {
     if (index <= headerRowIndex) return false;
     const keyMatches = keyColumns.some(column => {
       const cell = normalize(row[column]);
       return cell && [student.student_code, student.email, student.name].some(value => value && cell === normalize(value));
     });
-    return keyMatches && (trainerCol < 0 || !trainerName || normalize(row[trainerCol]) === normalize(trainerName));
+    return keyMatches;
   });
+
+  const exactTrainerRows = trainerCol >= 0 && trainerName
+    ? studentRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName))
+    : studentRows;
+  // The roster uses shortened trainer labels (for example, "Harinder"), while
+  // portal accounts may store full names ("Harinder Singh"). Use that direct
+  // match when available; otherwise a unique student row is still unambiguous.
+  const matchingRows = exactTrainerRows.length ? exactTrainerRows : studentRows;
   if (matchingRows.length !== 1) {
     throw new Error(matchingRows.length
-      ? `Found multiple sheet rows for student ${student.student_code || student.name}; include a unique student identifier or Trainer column`
-      : `No existing sheet row found for student ${student.student_code || student.name}${trainerName ? ` under trainer ${trainerName}` : ''}`);
+      ? `Found multiple sheet rows for student ${student.student_code || student.name}; add a unique student identifier or align the Trainer labels`
+      : `No existing sheet row found for student ${student.student_code || student.name}`);
   }
   const studentRowIndex = matchingRows[0].index;
 
@@ -118,5 +126,5 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
     method: 'PUT',
     body: JSON.stringify({ range: `'${title}'!${cell}`, majorDimension: 'ROWS', values: [[value]] }),
   });
-  return { sheet: sheet.properties.title, cell, value };
+  return { sheet: sheet.properties.title, cell, value, trainer: matchingRows[0].row[trainerCol] || trainerName };
 }

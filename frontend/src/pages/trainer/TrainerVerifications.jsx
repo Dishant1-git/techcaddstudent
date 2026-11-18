@@ -58,6 +58,7 @@ export function TrainerVerifications() {
       const res = await api.verifyAttendance(record.id);
       if (res.success) {
         toast.success(`Verified attendance for ${record.student_name}.`, 'Attendance Verified');
+        if (res.sheetSync?.status === 'failed') toast.warning(`Portal status saved, but the sheet was not updated: ${res.sheetSync.message}`, 'Sheet Sync Failed');
         fetchRecords();
       }
     } catch (err) {
@@ -77,6 +78,7 @@ export function TrainerVerifications() {
       const res = await api.rejectAttendance(rejectingRecord.id, rejectionReason);
       if (res.success) {
         toast.info(`Attendance rejected for ${rejectingRecord.student_name}.`, 'Attendance Rejected');
+        if (res.sheetSync?.status === 'failed') toast.warning(`Portal status saved, but the sheet was not updated: ${res.sheetSync.message}`, 'Sheet Sync Failed');
         setRejectingRecord(null);
         setRejectionReason('');
         fetchRecords();

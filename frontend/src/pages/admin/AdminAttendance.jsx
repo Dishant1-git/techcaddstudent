@@ -62,6 +62,7 @@ export function AdminAttendance() {
       const res = await api.verifyAttendance(id);
       if (res.success) {
         toast.success('Attendance verified by Admin.', 'Verified');
+        if (res.sheetSync?.status === 'failed') toast.warning(`Portal status saved, but the sheet was not updated: ${res.sheetSync.message}`, 'Sheet Sync Failed');
         fetchRecords();
       }
     } catch (err) {
@@ -80,6 +81,7 @@ export function AdminAttendance() {
       const res = await api.rejectAttendance(overrideModal.id, rejectionReason);
       if (res.success) {
         toast.info('Attendance marked rejected.', 'Rejected');
+        if (res.sheetSync?.status === 'failed') toast.warning(`Portal status saved, but the sheet was not updated: ${res.sheetSync.message}`, 'Sheet Sync Failed');
         setOverrideModal(null);
         setRejectionReason('');
         fetchRecords();
