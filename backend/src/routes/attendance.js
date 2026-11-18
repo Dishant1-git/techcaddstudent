@@ -2,6 +2,7 @@ import express from 'express';
 import { db, formatClassTiming, toDateStr, toTimeStr } from '../db/database.js';
 import { requireAuth, requireStudent, requireTrainer, requireAdmin, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
+import { syncAttendanceToSheet } from '../services/googleAttendanceSheet.js';
 
 const router = express.Router();
 
@@ -242,7 +243,7 @@ router.get('/trainer/all', requireAuth, requireTrainer, (req, res) => {
 });
 
 // POST /api/attendance/verify/:id - Trainer verifies attendance
-router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
+router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, async (req, res) => {
   try {
     const record = db.findById('attendance', req.params.id);
     if (!record) {
@@ -298,8 +299,24 @@ router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
 
     logAudit(req, 'ATTENDANCE_VERIFIED', `Attendance ID ${record.id} verified by ${trainerName} for student ID ${record.student_id}`);
 
+    // Sheet sync happens only after verification is committed in the portal.
+    // A temporary Google API issue must not undo or block the verification.
+    let sheetSync = { status: 'not_configured' };
+    if (student) {
+      try {
+        const trainer = record.trainer_id ? db.findById('trainers', record.trainer_id) : null;
+        const trainerUser = trainer ? db.findById('users', trainer.user_id) : null;
+        const enrichedStudent = db.getEnrichedStudent(student);
+        const result = await syncAttendanceToSheet(record, enrichedStudent, trainerUser, 'Verified');
+        sheetSync = { status: 'synced', ...result };
+      } catch (error) {
+        sheetSync = { status: 'failed', message: error.message };
+        console.error('[Attendance Sheet] Sync failed:', error.message);
+      }
+    }
+
     const enriched = db.getEnrichedAttendance(updated);
-    return res.json({ success: true, message: 'Attendance verified successfully.', data: enriched });
+    return res.json({ success: true, message: 'Attendance verified successfully.', data: enriched, sheetSync });
   } catch (err) {
     console.error('Verify attendance error:', err);
     return res.status(500).json({ success: false, message: 'Failed to verify attendance.' });
@@ -307,7 +324,7 @@ router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
 });
 
 // POST /api/attendance/reject/:id - Trainer rejects attendance
-router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
+router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, async (req, res) => {
   try {
     const { reason } = req.body;
     if (!reason || !reason.trim()) {
@@ -366,8 +383,22 @@ router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, (req, res) => {
 
     logAudit(req, 'ATTENDANCE_REJECTED', `Attendance ID ${record.id} rejected by ${trainerName}. Reason: ${reason.trim()}`);
 
+    let sheetSync = { status: 'not_configured' };
+    if (student) {
+      try {
+        const trainer = record.trainer_id ? db.findById('trainers', record.trainer_id) : null;
+        const trainerUser = trainer ? db.findById('users', trainer.user_id) : null;
+        const enrichedStudent = db.getEnrichedStudent(student);
+        const result = await syncAttendanceToSheet(record, enrichedStudent, trainerUser, 'Rejected');
+        sheetSync = { status: 'synced', ...result };
+      } catch (error) {
+        sheetSync = { status: 'failed', message: error.message };
+        console.error('[Attendance Sheet] Rejected attendance sync failed:', error.message);
+      }
+    }
+
     const enriched = db.getEnrichedAttendance(updated);
-    return res.json({ success: true, message: 'Attendance rejected.', data: enriched });
+    return res.json({ success: true, message: 'Attendance rejected.', data: enriched, sheetSync });
   } catch (err) {
     console.error('Reject attendance error:', err);
     return res.status(500).json({ success: false, message: 'Failed to reject attendance.' });

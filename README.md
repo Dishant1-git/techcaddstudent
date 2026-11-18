@@ -383,3 +383,14 @@ From the **Attendance Reports** section (`/admin/reports` or `/trainer/reports` 
 - **Backend**: Node.js, Express, JSON Relational Database Engine, JWT, BcryptJS, Multer.
 - **Frontend**: React 18, Vite, Tailwind CSS, Lucide Icons, Recharts, XLSX, jsPDF.
 - **Architecture**: Monorepo with dedicated `frontend` and `backend` workspaces, decoupled API client, and production-ready build orchestration.
+# Google Sheets attendance sync
+
+Verified attendance is mirrored to the assigned trainer's roster in the linked Google Sheet tab (`Attendence November`). Configure the service account values in `backend/.env`:
+
+- `ATTENDANCE_SHEET_ID=1GDPX-mIKF7Is3qNKSwxLh_-APtGgNGPvT7PkBFSIm-E`
+- `ATTENDANCE_SHEET_GID=1951125459`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` and `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` from a Google Cloud service account with the Google Sheets API enabled
+- `ATTENDANCE_SHEET_PRESENT_VALUE=Present` (optional; defaults to `Present`)
+- `ATTENDANCE_SHEET_ABSENT_VALUE=Absent` (optional; defaults to `Absent`)
+
+Share the spreadsheet with the service account email as an Editor. The configured tab has `Trainer` and `Student Name` columns and date headers in `DD-MM-YYYY` format. The sync matches both the student's name and assigned trainer, updates only an existing row, writes `Present` after verification and `Absent` after rejection. A sync failure is returned as `sheetSync.status: "failed"` and logged; the portal status change remains successful, and the record can be submitted again to retry the sync.

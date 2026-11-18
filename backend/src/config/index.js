@@ -17,6 +17,12 @@ export const config = {
   // GROQ_API_URL is accepted too because existing .env files store the key under that name
   groqApiKey: process.env.GROQ_API_KEY || process.env.GROQ_API_URL || '',
   groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
+  attendanceSheetId: process.env.ATTENDANCE_SHEET_ID || '',
+  attendanceSheetGid: process.env.ATTENDANCE_SHEET_GID || '',
+  googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+  googleServiceAccountPrivateKey: (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+  attendanceSheetPresentValue: process.env.ATTENDANCE_SHEET_PRESENT_VALUE || 'Present',
+  attendanceSheetAbsentValue: process.env.ATTENDANCE_SHEET_ABSENT_VALUE || 'Absent',
   uploadDir: path.resolve(__dirname, '../../uploads'),
   distDir: path.resolve(__dirname, '../../../frontend/dist'),
 };
