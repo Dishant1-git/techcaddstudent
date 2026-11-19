@@ -75,6 +75,23 @@ export function AdminDashboard() {
     complaintResolutionRate: 100,
     pendingStudentRegistrations: 0
   };
+  const courseRows = data?.courseComparison?.courses || [];
+  const enrolledCourses = courseRows.filter(course => course.student_count > 0);
+  const visibleEnrollmentCourses = enrolledCourses.slice(0, 6);
+  const otherStudentCount = enrolledCourses.slice(6).reduce((sum, course) => sum + course.student_count, 0);
+  const enrollmentPieData = [
+    ...visibleEnrollmentCourses.map(course => ({ name: course.course_name, value: course.student_count })),
+    ...(otherStudentCount > 0 ? [{ name: 'Other courses', value: otherStudentCount }] : [])
+  ];
+  const attendanceBarData = courseRows
+    .filter(course => course.current_month.rate !== null || course.previous_month.rate !== null)
+    .sort((a, b) => b.student_count - a.student_count || a.course_name.localeCompare(b.course_name))
+    .slice(0, 8)
+    .map(course => ({
+      course_name: course.course_name,
+      this_month: course.current_month.rate,
+      last_month: course.previous_month.rate
+    }));
 
   return (
     <div className="space-y-6">
@@ -262,36 +279,53 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[620px] text-left text-xs">
-            <thead>
-              <tr className="text-slate-400 font-semibold border-b border-slate-100">
-                <th className="py-2.5 px-3">Course</th>
-                <th className="py-2.5 px-3 text-right">Students</th>
-                <th className="py-2.5 px-3 text-right">This Month</th>
-                <th className="py-2.5 px-3 text-right">Last Month</th>
-                <th className="py-2.5 px-3 text-right">Change</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data?.courseComparison?.courses?.map(course => (
-                <tr key={course.course_id} className="hover:bg-slate-50/70">
-                  <td className="py-3 px-3 font-semibold text-slate-800">{course.course_name}</td>
-                  <td className="py-3 px-3 text-right font-semibold text-slate-700">{course.student_count}</td>
-                  <td className="py-3 px-3 text-right font-semibold text-emerald-700">{course.current_month.rate === null ? '—' : `${course.current_month.rate}%`}</td>
-                  <td className="py-3 px-3 text-right text-slate-600">{course.previous_month.rate === null ? '—' : `${course.previous_month.rate}%`}</td>
-                  <td className={`py-3 px-3 text-right font-bold ${course.change_percentage_points === null ? 'text-slate-400' : course.change_percentage_points >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                    {course.change_percentage_points === null ? '—' : `${course.change_percentage_points > 0 ? '+' : ''}${course.change_percentage_points} pp`}
-                  </td>
-                </tr>
-              ))}
-              {!data?.courseComparison?.courses?.length && (
-                <tr><td colSpan="5" className="py-8 text-center text-slate-400">No course data available.</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mt-2">
+          <div className="rounded-2xl border border-slate-100 p-4">
+            <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Students by Course</h3>
+            <p className="text-[11px] text-slate-400 mt-1">Share of currently enrolled students</p>
+            {enrollmentPieData.length ? (
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.8fr)] items-center gap-2 mt-2">
+                <div className="h-56 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={enrollmentPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={82} paddingAngle={3}>
+                        {enrollmentPieData.map((entry, index) => <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(value, name) => [`${value} students`, name]} contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {enrollmentPieData.map((course, index) => (
+                    <div key={course.name} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="flex items-center gap-2 min-w-0 text-slate-600"><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} /><span className="truncate">{course.name}</span></span>
+                      <strong className="text-slate-800 shrink-0">{course.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : <div className="h-56 flex items-center justify-center text-xs text-slate-400">No enrolled students to chart.</div>}
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 p-4">
+            <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Attendance Rate by Course</h3>
+            <p className="text-[11px] text-slate-400 mt-1">This month compared with the same dates last month • top 8 courses by enrollment</p>
+            {attendanceBarData.length ? (
+              <div className="h-64 mt-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={attendanceBarData} layout="vertical" margin={{ top: 2, right: 16, bottom: 2, left: 4 }}>
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={value => `${value}%`} stroke="#94a3b8" fontSize={10} tickLine={false} />
+                    <YAxis type="category" dataKey="course_name" width={125} stroke="#64748b" fontSize={10} tickLine={false} />
+                    <Tooltip formatter={(value, name) => [value === null ? 'No data' : `${value}%`, name]} contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }} />
+                    <Bar dataKey="this_month" name="This month" fill="#10b981" radius={[0, 4, 4, 0]} barSize={10} />
+                    <Bar dataKey="last_month" name="Last month" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={10} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : <div className="h-64 flex items-center justify-center text-xs text-slate-400">No attendance data to compare yet.</div>}
+            <p className="text-[10px] text-slate-400 mt-2">Present rate = verified attendance records ÷ all submitted attendance records.</p>
+          </div>
         </div>
-        <p className="text-[10px] text-slate-400 mt-3">Present rate = verified attendance records ÷ all submitted attendance records for that course. Student totals exclude registrations awaiting approval.</p>
       </section>
 
       {/* Charts Section: Attendance Trends & Complaint Categories */}
