@@ -69,6 +69,20 @@ function columnIndex(column) {
   return index - 1;
 }
 
+function studentNameScore(sheetName, portalName) {
+  const sheetValue = normalize(sheetName);
+  const portalValue = normalize(portalName);
+  if (!sheetValue || !portalValue) return 0;
+  if (sheetValue === portalValue) return 100;
+  const sheetTokens = sheetValue.split(' ');
+  const portalTokens = portalValue.split(' ');
+  const sharedPrefix = sheetTokens.some(sheetToken => portalTokens.some(portalToken =>
+    Math.min(sheetToken.length, portalToken.length) >= 4 &&
+    (sheetToken.startsWith(portalToken) || portalToken.startsWith(sheetToken))
+  ));
+  return sharedPrefix ? 50 : 0;
+}
+
 function dateVariants(date) {
   const [year, month, day] = date.split('-');
   return new Set([date, `${Number(day)}/${Number(month)}/${year}`, `${day}/${month}/${year}`, `${Number(month)}/${Number(day)}/${year}`, `${month}/${day}/${year}`, `${Number(day)}-${Number(month)}-${year}`].map(normalize));
@@ -101,35 +115,30 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   const keyColumns = [studentCodeCol, emailCol, nameCol].filter(index => index >= 0);
   if (!keyColumns.length) throw new Error('Sheet needs a Student ID/Code, Email, or Student Name column');
 
+  if (trainerCol < 0 || nameCol < 0) throw new Error('Sheet needs Trainer and Student Name columns');
   const trainerName = trainer?.name || '';
+  if (!trainerName) throw new Error('The student has no assigned trainer in the portal');
   const configuredIdCol = columnIndex(config.attendanceSheetStudentIdColumn);
   const idValues = [student.id, student.student_id, student.student_code].filter(value => value !== undefined && value !== null && value !== '').map(normalize);
-  const studentRows = rows.map((row, index) => ({ row, index })).filter(({ row, index }) => {
-    if (index <= headerRowIndex) return false;
-    const keyMatches = keyColumns.some(column => {
-      const cell = normalize(row[column]);
-      return cell && [student.student_code, student.email, student.name].some(value => value && cell === normalize(value));
-    });
-    const idMatches = idValues.includes(normalize(row[configuredIdCol]));
-    return keyMatches || idMatches;
+  const rosterRows = rows.map((row, index) => ({ row, index })).filter(({ index }) => index > headerRowIndex);
+  const exactTrainerRows = rosterRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName));
+  const trainerRows = exactTrainerRows.length ? exactTrainerRows : rosterRows.filter(({ row }) => {
+    const label = normalize(row[trainerCol]);
+    const fullName = normalize(trainerName);
+    return label && (fullName.startsWith(`${label} `) || label.startsWith(`${fullName} `) || fullName.split(' ')[0].startsWith(label.split(' ')[0]));
   });
+  if (!trainerRows.length) throw new Error(`No roster rows found for assigned trainer ${trainerName}`);
 
-  const idRows = studentRows.filter(({ row }) => idValues.includes(normalize(row[configuredIdCol])));
-  const candidateRows = idRows.length ? idRows : studentRows;
-  const exactTrainerRows = trainerCol >= 0 && trainerName
-    ? candidateRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName))
-    : candidateRows;
-  // The roster can shorten trainer names ("Harinder" / "Harinder Singh").
-  const trainerAliasRows = trainerCol >= 0 && trainerName
-    ? candidateRows.filter(({ row }) => {
-        const label = normalize(row[trainerCol]);
-        const fullName = normalize(trainerName);
-        return label && (fullName.startsWith(`${label} `) || label.startsWith(`${fullName} `) || fullName.split(' ')[0].startsWith(label.split(' ')[0]));
-      })
-    : studentRows;
-  const matchingRows = exactTrainerRows.length ? exactTrainerRows : trainerAliasRows;
+  const scoredRows = trainerRows.map(({ row, index }) => {
+    const idMatch = idValues.includes(normalize(row[configuredIdCol]));
+    const keyMatch = [student.student_code, student.email].some(value => value && keyColumns.some(column => normalize(row[column]) === normalize(value)));
+    const nameScore = studentNameScore(row[nameCol], student.name);
+    return { row, index, score: idMatch ? 300 : keyMatch ? 200 : nameScore };
+  }).filter(item => item.score > 0);
+  const topScore = Math.max(0, ...scoredRows.map(item => item.score));
+  const matchingRows = scoredRows.filter(item => item.score === topScore);
   if (matchingRows.length > 1) {
-    throw new Error(`Found multiple sheet rows for student ${student.student_code || student.name}; add a unique student identifier or align the Trainer labels`);
+    throw new Error(`Multiple students under ${trainerName} match ${student.name}; add a unique student ID to column ${config.attendanceSheetStudentIdColumn}`);
   }
 
   const dateColumns = rows[headerRowIndex].map((cell, index) => ({ index, value: normalize(cell) }))
@@ -138,7 +147,7 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   if (dateColumn < 0) throw new Error(`No date column for ${record.date} was found in the sheet header`);
 
   if (!matchingRows.length) {
-    throw new Error(`No existing sheet row found for student ${student.name} (portal ID ${student.id}); no row was added`);
+    throw new Error(`No existing student row found under trainer ${trainerName} for ${student.name} (portal ID ${student.id}); no row was added`);
   }
 
   const studentRowIndex = matchingRows[0].index;
