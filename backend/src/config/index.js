@@ -19,6 +19,7 @@ export const config = {
   groqModel: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
   attendanceSheetId: process.env.ATTENDANCE_SHEET_ID || '',
   attendanceSheetGid: process.env.ATTENDANCE_SHEET_GID || '',
+  attendanceSheetStudentIdColumn: process.env.ATTENDANCE_SHEET_STUDENT_ID_COLUMN || 'A',
   googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
   googleServiceAccountPrivateKey: (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   attendanceSheetPresentValue: process.env.ATTENDANCE_SHEET_PRESENT_VALUE || 'Present',

@@ -60,6 +60,15 @@ function columnLetter(index) {
   return result;
 }
 
+function columnIndex(column) {
+  let index = 0;
+  for (const char of String(column || '').toUpperCase()) {
+    if (char < 'A' || char > 'Z') throw new Error(`Invalid student ID column: ${column}`);
+    index = index * 26 + char.charCodeAt(0) - 64;
+  }
+  return index - 1;
+}
+
 function dateVariants(date) {
   const [year, month, day] = date.split('-');
   return new Set([date, `${Number(day)}/${Number(month)}/${year}`, `${day}/${month}/${year}`, `${Number(month)}/${Number(day)}/${year}`, `${month}/${day}/${year}`, `${Number(day)}-${Number(month)}-${year}`].map(normalize));
@@ -93,21 +102,26 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   if (!keyColumns.length) throw new Error('Sheet needs a Student ID/Code, Email, or Student Name column');
 
   const trainerName = trainer?.name || '';
+  const configuredIdCol = columnIndex(config.attendanceSheetStudentIdColumn);
+  const idValues = [student.id, student.student_id, student.student_code].filter(value => value !== undefined && value !== null && value !== '').map(normalize);
   const studentRows = rows.map((row, index) => ({ row, index })).filter(({ row, index }) => {
     if (index <= headerRowIndex) return false;
     const keyMatches = keyColumns.some(column => {
       const cell = normalize(row[column]);
       return cell && [student.student_code, student.email, student.name].some(value => value && cell === normalize(value));
     });
-    return keyMatches;
+    const idMatches = idValues.includes(normalize(row[configuredIdCol]));
+    return keyMatches || idMatches;
   });
 
+  const idRows = studentRows.filter(({ row }) => idValues.includes(normalize(row[configuredIdCol])));
+  const candidateRows = idRows.length ? idRows : studentRows;
   const exactTrainerRows = trainerCol >= 0 && trainerName
-    ? studentRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName))
-    : studentRows;
+    ? candidateRows.filter(({ row }) => normalize(row[trainerCol]) === normalize(trainerName))
+    : candidateRows;
   // The roster can shorten trainer names ("Harinder" / "Harinder Singh").
   const trainerAliasRows = trainerCol >= 0 && trainerName
-    ? studentRows.filter(({ row }) => {
+    ? candidateRows.filter(({ row }) => {
         const label = normalize(row[trainerCol]);
         const fullName = normalize(trainerName);
         return label && (fullName.startsWith(`${label} `) || label.startsWith(`${fullName} `) || fullName.split(' ')[0].startsWith(label.split(' ')[0]));
@@ -124,29 +138,7 @@ export async function syncAttendanceToSheet(record, student, trainer, status) {
   if (dateColumn < 0) throw new Error(`No date column for ${record.date} was found in the sheet header`);
 
   if (!matchingRows.length) {
-    if (studentRows.length) {
-      throw new Error(`Student ${student.name} exists in the sheet under a different trainer label; correct the Trainer cell before syncing`);
-    }
-    if (nameCol < 0 || trainerCol < 0) {
-      throw new Error(`No row found for ${student.name}; the sheet needs Student Name and Trainer columns to add the student`);
-    }
-    const appendedRow = Array(dateColumn + 1).fill('');
-    if (headers[1] === 'dept' || headers[1] === 'department') appendedRow[1] = student.domain || student.course_name || '';
-    appendedRow[trainerCol] = trainerName;
-    appendedRow[nameCol] = student.name;
-    appendedRow[dateColumn] = value;
-    const appendRange = encodeURIComponent(`'${title}'!A:ZZ`);
-    const appended = await sheetsRequest(`/values/${appendRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-      method: 'POST',
-      body: JSON.stringify({ majorDimension: 'ROWS', values: [appendedRow] }),
-    });
-    return {
-      sheet: sheet.properties.title,
-      cell: appended.updates?.updatedRange || 'appended row',
-      value,
-      trainer: trainerName,
-      studentAdded: true,
-    };
+    throw new Error(`No existing sheet row found for student ${student.name} (portal ID ${student.id}); no row was added`);
   }
 
   const studentRowIndex = matchingRows[0].index;
