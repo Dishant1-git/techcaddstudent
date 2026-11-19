@@ -38,6 +38,33 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 
 const PIE_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+function CoursePieTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const { name, value } = payload[0];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-xl">
+      <p className="text-xs font-semibold text-slate-800">{name}</p>
+      <p className="text-xs text-indigo-700 mt-0.5">{value} {value === 1 ? 'student' : 'students'}</p>
+    </div>
+  );
+}
+
+function CourseAttendanceTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const course = payload[0].payload;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-xl min-w-44">
+      <p className="text-xs font-semibold text-slate-800 mb-1.5">{course.course_name}</p>
+      {payload.map(item => (
+        <div key={item.dataKey} className="flex items-center justify-between gap-5 text-[11px] mt-0.5">
+          <span className="text-slate-600">{item.name}</span>
+          <strong style={{ color: item.color }}>{item.value == null ? 'No data' : `${item.value}%`}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AdminDashboard() {
   const { user } = useAuth();
   const toast = useToast();
@@ -89,6 +116,7 @@ export function AdminDashboard() {
     .slice(0, 8)
     .map(course => ({
       course_name: course.course_name,
+      course_label: course.course_name.length > 18 ? `${course.course_name.slice(0, 17)}…` : course.course_name,
       this_month: course.current_month.rate,
       last_month: course.previous_month.rate
     }));
@@ -291,7 +319,7 @@ export function AdminDashboard() {
                       <Pie data={enrollmentPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={82} paddingAngle={3}>
                         {enrollmentPieData.map((entry, index) => <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip formatter={(value, name) => [`${value} students`, name]} contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }} />
+                      <Tooltip content={<CoursePieTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -309,20 +337,24 @@ export function AdminDashboard() {
 
           <div className="rounded-2xl border border-slate-100 p-4">
             <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Attendance Rate by Course</h3>
-            <p className="text-[11px] text-slate-400 mt-1">This month compared with the same dates last month • top 8 courses by enrollment</p>
+            <p className="text-[11px] text-slate-400 mt-1">This month vs the same dates last month • top 8 courses</p>
             {attendanceBarData.length ? (
               <div className="h-64 mt-3">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={attendanceBarData} layout="vertical" margin={{ top: 2, right: 16, bottom: 2, left: 4 }}>
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={value => `${value}%`} stroke="#94a3b8" fontSize={10} tickLine={false} />
-                    <YAxis type="category" dataKey="course_name" width={125} stroke="#64748b" fontSize={10} tickLine={false} />
-                    <Tooltip formatter={(value, name) => [value === null ? 'No data' : `${value}%`, name]} contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }} />
-                    <Bar dataKey="this_month" name="This month" fill="#10b981" radius={[0, 4, 4, 0]} barSize={10} />
-                    <Bar dataKey="last_month" name="Last month" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={10} />
+                  <BarChart data={attendanceBarData} layout="vertical" margin={{ top: 4, right: 12, bottom: 4, left: 0 }} barCategoryGap="28%">
+                    <XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={value => `${value}%`} axisLine={false} tickLine={false} stroke="#94a3b8" fontSize={10} />
+                    <YAxis type="category" dataKey="course_label" width={112} axisLine={false} tickLine={false} stroke="#64748b" fontSize={10} />
+                    <Tooltip content={<CourseAttendanceTooltip />} cursor={{ fill: '#f8fafc' }} />
+                    <Bar dataKey="this_month" name="This month" fill="#10b981" radius={[0, 5, 5, 0]} barSize={12} />
+                    <Bar dataKey="last_month" name="Last month" fill="#818cf8" radius={[0, 5, 5, 0]} barSize={12} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : <div className="h-64 flex items-center justify-center text-xs text-slate-400">No attendance data to compare yet.</div>}
+            <div className="flex justify-center gap-5 text-[10px] text-slate-500 mt-1">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" />This month</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-indigo-400" />Last month</span>
+            </div>
             <p className="text-[10px] text-slate-400 mt-2">Present rate = verified attendance records ÷ all submitted attendance records.</p>
           </div>
         </div>
