@@ -221,6 +221,79 @@ export function AdminDashboard() {
         />
       </div>
 
+      {/* Course enrollment and attendance comparison */}
+      <section className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="font-bold text-sm text-slate-900 uppercase tracking-wider">Course Comparison</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Verified attendance this month to date vs the same dates last month
+              {data?.courseComparison?.period && ` (${data.courseComparison.period.current_from.slice(0, 7)} ${data.courseComparison.period.current_from.slice(8)}–${data.courseComparison.period.current_to.slice(8)} vs ${data.courseComparison.period.previous_from.slice(0, 7)} ${data.courseComparison.period.previous_from.slice(8)}–${data.courseComparison.period.previous_to.slice(8)})`}
+            </p>
+          </div>
+          <Link to="/admin/student-report" className="text-xs font-bold text-indigo-600 hover:underline">View reports →</Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-4">
+          <div className="rounded-2xl bg-indigo-50/70 border border-indigo-100 p-4">
+            <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Most Students</div>
+            {data?.courseComparison?.most_students ? (
+              <div className="mt-1 flex items-baseline justify-between gap-3">
+                <span className="font-bold text-slate-900 truncate">{data.courseComparison.most_students.course_name}</span>
+                <span className="text-lg font-extrabold text-indigo-700 shrink-0">{data.courseComparison.most_students.student_count}</span>
+              </div>
+            ) : <p className="text-xs text-slate-500 mt-2">No courses available.</p>}
+          </div>
+          <div className="rounded-2xl bg-emerald-50/70 border border-emerald-100 p-4">
+            <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Highest Present Rate This Month</div>
+            {data?.courseComparison?.highest_attendance ? (
+              <div className="mt-1 flex items-baseline justify-between gap-3">
+                <span className="font-bold text-slate-900 truncate">{data.courseComparison.highest_attendance.course_name}</span>
+                <span className="text-lg font-extrabold text-emerald-700 shrink-0">{data.courseComparison.highest_attendance.current_month.rate}%</span>
+              </div>
+            ) : <p className="text-xs text-slate-500 mt-2">No attendance recorded this month.</p>}
+            {data?.courseComparison?.highest_attendance && (
+              <p className="text-[11px] text-slate-500 mt-1">
+                {data.courseComparison.highest_attendance.change_percentage_points === null
+                  ? 'No matching previous-month attendance to compare.'
+                  : `${data.courseComparison.highest_attendance.change_percentage_points > 0 ? '+' : ''}${data.courseComparison.highest_attendance.change_percentage_points} percentage points vs last month`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-left text-xs">
+            <thead>
+              <tr className="text-slate-400 font-semibold border-b border-slate-100">
+                <th className="py-2.5 px-3">Course</th>
+                <th className="py-2.5 px-3 text-right">Students</th>
+                <th className="py-2.5 px-3 text-right">This Month</th>
+                <th className="py-2.5 px-3 text-right">Last Month</th>
+                <th className="py-2.5 px-3 text-right">Change</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data?.courseComparison?.courses?.map(course => (
+                <tr key={course.course_id} className="hover:bg-slate-50/70">
+                  <td className="py-3 px-3 font-semibold text-slate-800">{course.course_name}</td>
+                  <td className="py-3 px-3 text-right font-semibold text-slate-700">{course.student_count}</td>
+                  <td className="py-3 px-3 text-right font-semibold text-emerald-700">{course.current_month.rate === null ? '—' : `${course.current_month.rate}%`}</td>
+                  <td className="py-3 px-3 text-right text-slate-600">{course.previous_month.rate === null ? '—' : `${course.previous_month.rate}%`}</td>
+                  <td className={`py-3 px-3 text-right font-bold ${course.change_percentage_points === null ? 'text-slate-400' : course.change_percentage_points >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {course.change_percentage_points === null ? '—' : `${course.change_percentage_points > 0 ? '+' : ''}${course.change_percentage_points} pp`}
+                  </td>
+                </tr>
+              ))}
+              {!data?.courseComparison?.courses?.length && (
+                <tr><td colSpan="5" className="py-8 text-center text-slate-400">No course data available.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-3">Present rate = verified attendance records ÷ all submitted attendance records for that course. Student totals exclude registrations awaiting approval.</p>
+      </section>
+
       {/* Charts Section: Attendance Trends & Complaint Categories */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Attendance Trends Area Chart (8 cols) */}

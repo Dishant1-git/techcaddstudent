@@ -8,6 +8,56 @@ function formatDate(date = new Date()) {
   return toDateStr(date);
 }
 
+function getCourseComparison(courses, students, attendance, todayStr) {
+  const [year, month, day] = todayStr.split('-').map(Number);
+  const currentFrom = `${year}-${String(month).padStart(2, '0')}-01`;
+  const currentTo = todayStr;
+  const previousMonthEnd = new Date(Date.UTC(year, month - 1, 0));
+  const previousYear = previousMonthEnd.getUTCFullYear();
+  const previousMonth = previousMonthEnd.getUTCMonth() + 1;
+  const previousDay = Math.min(day, previousMonthEnd.getUTCDate());
+  const previousFrom = `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`;
+  const previousTo = `${previousYear}-${String(previousMonth).padStart(2, '0')}-${String(previousDay).padStart(2, '0')}`;
+
+  const rows = courses.map(course => {
+    const courseStudents = students.filter(student =>
+      String(student.course_id || '') === String(course.id) &&
+      student.status !== 'pending_approval' && student.status !== 'rejected'
+    );
+    const courseAttendance = attendance.filter(record => String(record.course_id || '') === String(course.id));
+    const summarize = (from, to) => {
+      const records = courseAttendance.filter(record => record.date >= from && record.date <= to);
+      const verified = records.filter(record => record.status === 'Verified').length;
+      return {
+        total: records.length,
+        present: verified,
+        rate: records.length ? Math.round((verified / records.length) * 100) : null
+      };
+    };
+    const current = summarize(currentFrom, currentTo);
+    const previous = summarize(previousFrom, previousTo);
+    return {
+      course_id: course.id,
+      course_name: course.course_name,
+      student_count: courseStudents.length,
+      current_month: current,
+      previous_month: previous,
+      change_percentage_points: current.rate === null || previous.rate === null ? null : current.rate - previous.rate
+    };
+  });
+
+  const byStudents = [...rows].sort((a, b) => b.student_count - a.student_count || a.course_name.localeCompare(b.course_name));
+  const byAttendance = rows.filter(row => row.current_month.rate !== null)
+    .sort((a, b) => b.current_month.rate - a.current_month.rate || b.current_month.total - a.current_month.total || a.course_name.localeCompare(b.course_name));
+
+  return {
+    period: { current_from: currentFrom, current_to: currentTo, previous_from: previousFrom, previous_to: previousTo },
+    most_students: byStudents[0] || null,
+    highest_attendance: byAttendance[0] || null,
+    courses: rows.sort((a, b) => b.student_count - a.student_count || a.course_name.localeCompare(b.course_name))
+  };
+}
+
 // GET /api/analytics/admin - Comprehensive Admin Dashboard Analytics
 router.get('/admin', requireAuth, requireAdmin, (req, res) => {
   try {
@@ -18,6 +68,7 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
     const activeCourses = db.count('courses', c => c.status === 'active');
 
     const allAttendance = db.find('attendance');
+    const courseComparison = getCourseComparison(db.find('courses'), db.find('students').map(s => db.getEnrichedStudent(s)), allAttendance, todayStr);
     const todayAttendance = allAttendance.filter(a => a.date === todayStr);
     const pendingVerification = allAttendance.filter(a => a.status === 'Pending Verification');
     const verifiedAttendance = allAttendance.filter(a => a.status === 'Verified');
@@ -131,6 +182,7 @@ router.get('/admin', requireAuth, requireAdmin, (req, res) => {
         lowAttendanceStudents,
         trainerActivity: allTrainers,
         attendanceTrends,
+        courseComparison,
         categoryDistribution: Object.entries(categoryMap).map(([category, count]) => ({ category, count })),
         trainerDistribution
       }
