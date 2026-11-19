@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, formatClassTiming, toDateStr, toTimeStr } from '../db/database.js';
+import { db, formatClassTiming, toDateStr, toTime24, toTimeStr } from '../db/database.js';
 import { requireAuth, requireStudent, requireTrainer, requireAdmin, requireTrainerOrAdmin } from '../middleware/auth.js';
 import { logAudit } from '../middleware/audit.js';
 import { syncAttendanceToSheet } from '../services/googleAttendanceSheet.js';
@@ -27,9 +27,8 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
       return res.status(404).json({ success: false, message: 'Student profile not found.' });
     }
 
-    const { session, date, notes } = req.body;
-    const sessionName = session && session.trim() ? session.trim() : 'Class';
-    const targetDate = date ? date.trim() : formatDate();
+    const targetDate = formatDate();
+    const sessionName = 'Assigned Class';
 
     const enrollment = student.enrollment_status || 'running';
     if (enrollment !== 'running') {
@@ -41,7 +40,6 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
       });
     }
 
-    // The student picks their own trainer and class timing
     const trainerId = student.trainer_id || null;
     const courseId = student.course_id || null;
     const trainer = trainerId ? db.findById('trainers', trainerId) : null;
@@ -50,29 +48,46 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'CLASS_NOT_SET',
-        message: 'Please choose your trainer and class timing in "My Profile" before marking attendance.'
+        message: 'Choose your trainer and class timing in My Profile before marking attendance.'
       });
     }
 
     const classTiming = formatClassTiming(student.class_start_time, student.class_end_time);
+    const startTime = toTime24(student.class_start_time);
+    const endTime = toTime24(student.class_end_time);
+    if (!startTime || !endTime) {
+      return res.status(400).json({ success: false, code: 'CLASS_TIME_NOT_SET', message: 'Set your assigned class timing in My Profile before marking attendance.' });
+    }
 
-    // DUPLICATE CHECK: one record per student, date, and session
-    const duplicate = db.findOne('attendance', a =>
-      String(a.student_id) === String(student.id) &&
-      a.date === targetDate &&
-      a.session.toLowerCase() === sessionName.toLowerCase()
+    const currentTime = toTime24(formatTime());
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    const [currentHour, currentMinute] = currentTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    const currentMinutes = currentHour * 60 + currentMinute;
+    const withinAssignedSlot = startMinutes <= endMinutes
+      ? currentMinutes >= startMinutes && currentMinutes <= endMinutes
+      : currentMinutes >= startMinutes || currentMinutes <= endMinutes;
+
+    const existingToday = db.findOne('attendance', attendance =>
+      String(attendance.student_id) === String(student.id) && attendance.date === targetDate
     );
-
-    if (duplicate) {
-      return res.status(400).json({
-        success: false,
-        message: `Attendance has already been marked for '${sessionName}' on ${targetDate} (Status: ${duplicate.status}). Duplicate submissions are not allowed.`
-      });
+    const pendingAdminRequest = db.findOne('attendance', attendance =>
+      String(attendance.student_id) === String(student.id) && attendance.date === targetDate &&
+      attendance.admin_only === true && attendance.status === 'Pending Verification'
+    );
+    if (pendingAdminRequest) {
+      return res.status(409).json({ success: false, message: 'Your attendance exception is already waiting for an administrator.' });
     }
 
     const checkInTime = formatTime();
-
-    // Create attendance record with initial status 'Pending Verification'
+    const assignedTrainerName = db.getEnrichedStudent(student).trainer_name;
+    const adminReviewReason = existingToday
+      ? 'Repeat attendance attempt'
+      : !withinAssignedSlot
+        ? 'Attendance attempt outside assigned class time'
+        : null;
     const newRecord = db.insert('attendance', {
       student_id: student.id,
       trainer_id: trainerId,
@@ -86,24 +101,44 @@ router.post('/mark', requireAuth, requireStudent, (req, res) => {
       verified_by: null,
       verified_by_name: null,
       rejection_reason: null,
-      notes: notes ? notes.trim() : null
+      notes: adminReviewReason
+        ? `${adminReviewReason}${existingToday ? ` (original attendance ID ${existingToday.id}, status ${existingToday.status})` : ''}`
+        : null,
+      admin_only: !!adminReviewReason,
+      admin_review_reason: adminReviewReason,
+      duplicate_of: existingToday?.id || null
     });
 
-    db.insert('notifications', {
-      user_id: trainer.user_id,
-      title: 'Attendance Verification Required',
-      message: `${req.user.name} marked attendance for '${sessionName}'${classTiming ? ` (${classTiming})` : ''} on ${targetDate}.`,
-      type: 'attendance_pending',
-      is_read: false,
-      link: '/trainer/verifications'
-    });
+    if (adminReviewReason) {
+      db.find('users', user => user.role === 'admin').forEach(admin => {
+        db.insert('notifications', {
+          user_id: admin.id,
+          title: 'Attendance Exception Requires Review',
+          message: `${req.user.name} requested attendance approval for ${targetDate}: ${adminReviewReason}. Assigned trainer: ${assignedTrainerName}.`,
+          type: 'attendance_admin_review',
+          is_read: false,
+          link: '/admin/attendance'
+        });
+      });
+    } else {
+      db.insert('notifications', {
+        user_id: trainer.user_id,
+        title: 'Attendance Verification Required',
+        message: `${req.user.name} marked attendance for their assigned class (${classTiming}) on ${targetDate}.`,
+        type: 'attendance_pending',
+        is_read: false,
+        link: '/trainer/verifications'
+      });
+    }
 
-    logAudit(req, 'ATTENDANCE_MARKED', `Student ${req.user.name} marked attendance for ${sessionName} on ${targetDate}${classTiming ? ` (${classTiming})` : ''}`);
+    logAudit(req, adminReviewReason ? 'ATTENDANCE_ADMIN_REVIEW_REQUESTED' : 'ATTENDANCE_MARKED', `Student ${req.user.name} ${adminReviewReason ? `requested admin review (${adminReviewReason})` : 'marked attendance'} for ${targetDate} (${classTiming})`);
 
     const enriched = db.getEnrichedAttendance(newRecord);
     return res.status(201).json({
       success: true,
-      message: 'Attendance marked successfully! Status is Pending Verification by your assigned trainer.',
+      message: adminReviewReason
+        ? 'Your attendance request was sent to the admin for review.'
+        : 'Attendance marked successfully! It is waiting for your assigned trainer to verify.',
       data: enriched
     });
   } catch (err) {
@@ -188,6 +223,7 @@ router.get('/trainer/pending', requireAuth, requireTrainer, (req, res) => {
     // Filter attendance records where status is Pending Verification and student is assigned
     const pending = db.find('attendance', a => 
       a.status === 'Pending Verification' &&
+      !a.admin_only &&
       (String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id)))
     ).sort((a, b) => new Date(b.date + ' ' + (b.check_in_time || '')) - new Date(a.date + ' ' + (a.check_in_time || '')))
      .map(a => db.getEnrichedAttendance(a));
@@ -212,7 +248,8 @@ router.get('/trainer/all', requireAuth, requireTrainer, (req, res) => {
     const assignedStudents = db.getTrainerStudents(trainer.id).map(s => String(s.id));
 
     let records = db.find('attendance', a => 
-      String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id))
+      !a.admin_only &&
+      (String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id)))
     );
 
     if (date) {
@@ -255,6 +292,9 @@ router.post('/verify/:id', requireAuth, requireTrainerOrAdmin, async (req, res) 
 
     // Check trainer ownership if user is a trainer
     if (req.user.role === 'trainer') {
+      if (record.admin_only) {
+        return res.status(403).json({ success: false, message: 'This attendance request is reserved for administrator review.' });
+      }
       const trainer = db.findOne('trainers', t => String(t.user_id) === String(req.user.id));
       if (!trainer) {
         return res.status(403).json({ success: false, message: 'Trainer profile not found.' });
@@ -340,6 +380,9 @@ router.post('/reject/:id', requireAuth, requireTrainerOrAdmin, async (req, res) 
     let trainerName = req.user.name;
 
     if (req.user.role === 'trainer') {
+      if (record.admin_only) {
+        return res.status(403).json({ success: false, message: 'This attendance request is reserved for administrator review.' });
+      }
       const trainer = db.findOne('trainers', t => String(t.user_id) === String(req.user.id));
       if (!trainer) {
         return res.status(403).json({ success: false, message: 'Trainer profile not found.' });
@@ -501,7 +544,8 @@ router.get('/reports', requireAuth, requireTrainerOrAdmin, (req, res) => {
       const assignedStudents = db.getTrainerStudents(trainer.id).map(s => String(s.id));
 
       records = records.filter(a => 
-        String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id))
+        !a.admin_only &&
+        (String(a.trainer_id) === String(trainer.id) || assignedStudents.includes(String(a.student_id)))
       );
     } else if (trainer_id) {
       records = records.filter(a => String(a.trainer_id) === String(trainer_id));

@@ -276,11 +276,11 @@ router.get('/trainer', requireAuth, requireTrainer, (req, res) => {
     const studentIds = students.map(s => String(s.id));
 
     const attendanceRecords = db.find('attendance', a => 
-      String(a.trainer_id) === String(trainer.id) || studentIds.includes(String(a.student_id))
+      !a.admin_only && (String(a.trainer_id) === String(trainer.id) || studentIds.includes(String(a.student_id)))
     );
 
     const todayAttendance = attendanceRecords.filter(a => a.date === todayStr);
-    const pendingVerifications = attendanceRecords.filter(a => a.status === 'Pending Verification');
+    const pendingVerifications = attendanceRecords.filter(a => a.status === 'Pending Verification' && !a.admin_only);
     const verifiedAttendance = attendanceRecords.filter(a => a.status === 'Verified');
 
     // Class time slots chosen by this trainer's students, earliest first

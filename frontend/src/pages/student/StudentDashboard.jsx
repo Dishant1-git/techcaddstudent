@@ -23,7 +23,7 @@ import { AttendanceGauge } from '../../components/common/AttendanceGauge';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { EnrollmentBadge } from '../../components/common/EnrollmentBadge';
-import { formatDate, todayIST } from '../../utils/time';
+import { formatDate } from '../../utils/time';
 
 export function StudentDashboard() {
   const { user, profile, refreshProfile } = useAuth();
@@ -31,10 +31,6 @@ export function StudentDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Mark Attendance Modal State
-  const [showMarkModal, setShowMarkModal] = useState(false);
-  const [session, setSession] = useState('Morning Lecture');
-  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchDashboard = async () => {
@@ -56,18 +52,12 @@ export function StudentDashboard() {
     fetchDashboard();
   }, []);
 
-  const handleMarkAttendance = async (e) => {
-    e.preventDefault();
+  const handleMarkAttendance = async () => {
     setSubmitting(true);
     try {
-      const res = await api.markAttendance({
-        session,
-        notes
-      });
+      const res = await api.markAttendance({});
       if (res.success) {
-        toast.success(res.message, 'Attendance Submitted');
-        setShowMarkModal(false);
-        setNotes('');
+        toast.success(res.message, res.data?.admin_only ? 'Admin Review Requested' : 'Attendance Submitted');
         fetchDashboard();
         refreshProfile();
       }
@@ -110,11 +100,12 @@ export function StudentDashboard() {
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => setShowMarkModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-indigo-950 font-bold text-sm hover:bg-indigo-50 shadow-lg shadow-black/10 transition-all hover:scale-105 cursor-pointer"
+              onClick={handleMarkAttendance}
+              disabled={submitting || !student?.trainer_id || !student?.class_timing}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-indigo-950 font-bold text-sm hover:bg-indigo-50 shadow-lg shadow-black/10 transition-all hover:scale-105 cursor-pointer disabled:opacity-60"
             >
               <CalendarCheck className="w-4 h-4 text-indigo-600" />
-              Mark Attendance Today
+              {submitting ? 'Submitting…' : todayMarked ? 'Request Admin Review' : 'Mark Attendance Today'}
             </button>
           </div>
         </div>
@@ -206,7 +197,7 @@ export function StudentDashboard() {
                     {rec.status === 'Pending Verification' && (
                       <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-start gap-2">
                         <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                        <span>Submitted! Your assigned trainer ({student?.trainer_name}) will verify your attendance shortly.</span>
+                        <span>{rec.admin_only ? 'Your exception request was sent to the administration for review.' : `Submitted! Your assigned trainer (${student?.trainer_name}) will verify your attendance shortly.`}</span>
                       </div>
                     )}
 
@@ -226,10 +217,11 @@ export function StudentDashboard() {
                   Please mark your check-in time for today's class session.
                 </p>
                 <button
-                  onClick={() => setShowMarkModal(true)}
-                  className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 shadow-sm transition-all cursor-pointer"
+                  onClick={handleMarkAttendance}
+                  disabled={submitting}
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 shadow-sm transition-all cursor-pointer disabled:opacity-60"
                 >
-                  Mark Check-In Now
+                  {submitting ? 'Submitting…' : 'Mark Check-In Now'}
                 </button>
               </div>
             )}
@@ -358,71 +350,6 @@ export function StudentDashboard() {
         </div>
       </div>
 
-      {/* Mark Attendance Modal */}
-      <Modal
-        isOpen={showMarkModal}
-        onClose={() => setShowMarkModal(false)}
-        title="Mark Today's Attendance"
-        subtitle={`Student: ${user?.name} (${student?.student_id || 'STU-ID'}) | Date: ${todayIST()}`}
-      >
-        <form onSubmit={handleMarkAttendance} className="space-y-4">
-          <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              Verification Workflow
-            </div>
-            <p className="text-indigo-700/90 leading-relaxed">
-              When you submit, your attendance is set to <strong>Pending Verification</strong> and forwarded to your assigned trainer (<strong>{student?.trainer_name || 'Assigned Trainer'}</strong>) for verification.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Class Session
-            </label>
-            <select
-              value={session}
-              onChange={(e) => setSession(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-800"
-            >
-              <option value="Morning Lecture">Morning Lecture (09:00 AM - 12:00 PM)</option>
-              <option value="Afternoon Lab">Afternoon Practical Lab (01:30 PM - 04:30 PM)</option>
-              <option value="Evening Discussion">Evening Discussion (05:30 PM - 08:30 PM)</option>
-              <option value="Special Seminar">Special Seminar / Workshop</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Optional Note / Comments
-            </label>
-            <textarea
-              rows="2"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Completed React Router lab exercises in Room 302"
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowMarkModal(false)}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {submitting ? 'Submitting...' : 'Confirm Check-In'}
-            </button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }

@@ -131,7 +131,12 @@ export function AdminAttendance() {
     {
       header: 'Session',
       key: 'session',
-      render: (r) => <span className="text-xs text-slate-800 font-medium">{r.session}</span>
+      render: (r) => (
+        <div>
+          <span className="text-xs text-slate-800 font-medium">{r.session}</span>
+          {r.admin_only && <div className="text-[10px] font-semibold text-amber-700">Admin review: {r.admin_review_reason}</div>}
+        </div>
+      )
     },
     {
       header: 'Check-In',

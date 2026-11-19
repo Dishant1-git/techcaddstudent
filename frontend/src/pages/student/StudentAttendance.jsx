@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import {
   CalendarCheck,
   Clock,
@@ -9,8 +8,7 @@ import {
   Filter,
   Eye,
   Info,
-  Calendar,
-  Sparkles
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -38,9 +36,6 @@ export function StudentAttendance() {
   const [loading, setLoading] = useState(true);
 
   // Mark Modal
-  const [showMarkModal, setShowMarkModal] = useState(false);
-  const [session, setSession] = useState('Regular Class');
-  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Detail Modal
@@ -66,18 +61,12 @@ export function StudentAttendance() {
     fetchAttendance();
   }, []);
 
-  const handleMarkAttendance = async (e) => {
-    e.preventDefault();
+  const handleMarkAttendance = async () => {
     setSubmitting(true);
     try {
-      const res = await api.markAttendance({
-        session,
-        notes
-      });
+      const res = await api.markAttendance({});
       if (res.success) {
-        toast.success(res.message, 'Check-In Recorded');
-        setShowMarkModal(false);
-        setNotes('');
+        toast.success(res.message, res.data?.admin_only ? 'Admin Review Requested' : 'Check-In Recorded');
         fetchAttendance();
       }
     } catch (err) {
@@ -171,11 +160,12 @@ export function StudentAttendance() {
             }}
           />
           <button
-            onClick={() => setShowMarkModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+            onClick={handleMarkAttendance}
+            disabled={submitting || !profile?.trainer_id || !profile?.class_timing}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
-            Mark Check-In
+            {submitting ? 'Submitting…' : records.some(record => record.date === todayIST()) ? 'Request Admin Review' : 'Mark Check-In'}
           </button>
         </div>
       </div>
@@ -244,87 +234,6 @@ export function StudentAttendance() {
         ]}
         emptyMessage="No attendance records found matching criteria."
       />
-
-      {/* Mark Attendance Modal */}
-      <Modal
-        isOpen={showMarkModal}
-        onClose={() => setShowMarkModal(false)}
-        title="Mark Class Attendance"
-        subtitle={`Date: ${todayIST()}${profile?.class_timing ? ` | Class time: ${profile.class_timing}` : ''}`}
-      >
-        {!profile?.trainer_id ? (
-          <div className="space-y-4 text-sm">
-            <p className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
-              Before marking attendance, please choose your trainer and class timing.
-            </p>
-            <div className="flex justify-end">
-              <Link
-                to="/student/profile"
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm"
-              >
-                Set up my class
-              </Link>
-            </div>
-          </div>
-        ) : (
-        <form onSubmit={handleMarkAttendance} className="space-y-4">
-          <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              How it works
-            </div>
-            <p className="text-indigo-700/90 leading-relaxed">
-              Your trainer <strong>{profile?.trainer_name}</strong> will check and verify your attendance.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Class type
-            </label>
-            <select
-              value={session}
-              onChange={(e) => setSession(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-800"
-            >
-              <option value="Regular Class">Regular class{profile?.class_timing ? ` (${profile.class_timing})` : ''}</option>
-              <option value="Extra Class">Extra class</option>
-              <option value="Workshop">Workshop / Seminar</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Optional Student Remarks
-            </label>
-            <textarea
-              rows="2"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Present on time, completed laboratory assignment #4"
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowMarkModal(false)}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {submitting ? 'Submitting...' : 'Submit Attendance'}
-            </button>
-          </div>
-        </form>
-        )}
-      </Modal>
 
       {/* Record Details Modal */}
       {selectedRecord && (

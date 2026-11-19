@@ -532,7 +532,7 @@ class Database {
     const studentIds = students.map(s => String(s.id));
     const pendingVerifications = this.count('attendance', a => 
       (String(a.trainer_id) === String(trainer.id) || studentIds.includes(String(a.student_id))) && 
-      a.status === 'Pending Verification'
+      a.status === 'Pending Verification' && !a.admin_only
     );
 
     return {
