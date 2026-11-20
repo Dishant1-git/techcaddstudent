@@ -116,7 +116,7 @@ export function AdminDashboard() {
     .slice(0, 8)
     .map(course => ({
       course_name: course.course_name,
-      course_label: course.course_name.length > 18 ? `${course.course_name.slice(0, 17)}…` : course.course_name,
+      course_label: course.course_name.length > 14 ? `${course.course_name.slice(0, 13)}…` : course.course_name,
       this_month: course.current_month.rate,
       last_month: course.previous_month.rate
     }));
@@ -337,16 +337,16 @@ export function AdminDashboard() {
 
           <div className="rounded-2xl border border-slate-100 p-4">
             <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Attendance Rate by Course</h3>
-            <p className="text-[11px] text-slate-400 mt-1">This month vs the same dates last month • top 8 courses</p>
+            <p className="text-[11px] text-slate-400 mt-1">Attendance rate by course • top 8 courses</p>
             {attendanceBarData.length ? (
               <div className="h-64 mt-3">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={attendanceBarData} layout="vertical" margin={{ top: 4, right: 12, bottom: 4, left: 0 }} barCategoryGap="28%">
-                    <XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={value => `${value}%`} axisLine={false} tickLine={false} stroke="#94a3b8" fontSize={10} />
-                    <YAxis type="category" dataKey="course_label" width={112} axisLine={false} tickLine={false} stroke="#64748b" fontSize={10} />
+                  <BarChart data={attendanceBarData} margin={{ top: 12, right: 12, bottom: 22, left: 0 }} barCategoryGap="24%">
+                    <XAxis dataKey="course_label" interval={0} angle={-25} textAnchor="end" height={48} tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={value => `${value}%`} width={38} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                     <Tooltip content={<CourseAttendanceTooltip />} cursor={{ fill: '#f8fafc' }} />
-                    <Bar dataKey="this_month" name="This month" fill="#10b981" radius={[0, 5, 5, 0]} barSize={12} />
-                    <Bar dataKey="last_month" name="Last month" fill="#818cf8" radius={[0, 5, 5, 0]} barSize={12} />
+                    <Bar dataKey="this_month" name="This month" fill="#059669" radius={[5, 5, 0, 0]} barSize={16} />
+                    <Bar dataKey="last_month" name="Last month" fill="#818cf8" radius={[5, 5, 0, 0]} barSize={16} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
